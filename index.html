@@ -161,7 +161,7 @@ function cardHtml(v) {
     ${foto}
     <div class="info">
       <div class="nome">${v.nome}${esaurito ? ' <span class="tag-esaurito">ESAURITO</span>' : ""}</div>
-      <div class="desc">${v.descrizione || ""}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}</div>
+      <div class="desc">${v.descrizione || ""}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}${v.porzione ? ` · Porzione: ${v.porzione}` : ""}</div>
       <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
       ${traccia(v)}
     </div>
