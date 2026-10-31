@@ -216,20 +216,6 @@
       "ordini_entro": "",
       "voci": [
         {
-          "id": "baccala-w2mu",
-          "nome": "baccala",
-          "descrizione": "",
-          "prezzo": 6,
-          "unita": "kg",
-          "disponibile": true,
-          "stato": "disponibile",
-          "nome_scientifico": "baccalus",
-          "zona_fao": "45",
-          "metodo": "a mano",
-          "attrezzo": "rete",
-          "consiglio": "farlo a bagno maria o fritto com pomodoro"
-        },
-        {
           "id": "pesce-spada-wn2p",
           "nome": "pesce spada",
           "descrizione": "",
