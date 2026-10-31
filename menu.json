@@ -70,8 +70,7 @@
           "prezzo": 24,
           "unita": "kg",
           "foto": "img/spigola-orata.jpg",
-          "disponibile": true,
-          "in_evidenza": true
+          "disponibile": true
         },
         {
           "id": "rombo-sogliola",
