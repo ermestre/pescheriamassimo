@@ -152,6 +152,22 @@
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
+        },
+        {
+          "id": "pesce-spada-udio",
+          "nome": "Pesce spada",
+          "descrizione": "",
+          "prezzo": 0,
+          "unita": "kg",
+          "nome_scientifico": "Xiphias gladius",
+          "zona_fao": "",
+          "metodo": "",
+          "provenienza": "",
+          "data_arrivo": "",
+          "attrezzo": "",
+          "allergeni": "",
+          "disponibile": false,
+          "stato": "disponibile"
         }
       ]
     },
