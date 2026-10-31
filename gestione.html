@@ -11,22 +11,26 @@
   header { background: var(--blu); color:#fff; padding: 16px; }
   header h1 { margin:0; font-size: 20px; }
   header p { margin: 4px 0 0; font-size: 13px; opacity:.85; }
+  nav.schede { display:flex; position: sticky; top: 0; z-index: 5; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  nav.schede button { flex:1; border:0; background:none; padding: 14px 6px; font-size: 15px; color: var(--grigio); border-bottom: 3px solid transparent; cursor:pointer; }
+  nav.schede button.attiva { color: var(--blu); font-weight: 700; border-bottom-color: var(--oro); }
   main { max-width: 680px; margin: 0 auto; padding: 0 12px; }
   section { background:#fff; border-radius: 12px; padding: 14px; margin-top: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
   h2 { font-size: 15px; color: var(--blu); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .5px; }
   h3 { font-size: 14px; color: var(--blu); margin: 16px 0 8px; }
   label { display:block; font-size: 13px; color: var(--grigio); margin: 10px 0 4px; }
-  input, select { width:100%; padding:11px; font-size:16px; border:1px solid #ccc; border-radius:8px; background:#fff; font-family: inherit; }
-  .riga { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .voce { border-top: 1px solid #eee; padding: 12px 0; }
+  input, select, textarea { width:100%; padding:11px; font-size:16px; border:1px solid #ccc; border-radius:8px; background:#fff; font-family: inherit; }
+  .voce { border-top: 1px solid #eee; padding: 14px 0; }
   .voce:first-of-type { border-top: 0; }
-  .voce .nome-voce { font-weight: 700; margin-bottom: 8px; }
-  .voce .desc { font-size: 13px; color: var(--grigio); margin-bottom: 8px; }
+  .voce .desc { font-size: 13px; color: var(--grigio); margin: 4px 0 8px; }
   .campi { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items:end; }
+  .campi.uno { grid-template-columns: 1fr; }
   .campi label { margin: 0 0 4px; }
   .check { display:flex; align-items:center; gap:8px; font-size: 15px; }
   .check input { width: 22px; height: 22px; }
-  .elimina { background:none; border:1px solid var(--rosso); color: var(--rosso); border-radius:8px; padding: 10px; font-size: 14px; width:100%; margin-top:8px; }
+  details { margin-top: 10px; background: #fafafa; border-radius: 10px; padding: 8px 10px; }
+  summary { font-weight: 700; color: var(--blu); cursor: pointer; padding: 6px 0; font-size: 14px; }
+  .elimina { background:none; border:1px solid var(--rosso); color: var(--rosso); border-radius:8px; padding: 10px; font-size: 14px; width:100%; margin-top:10px; }
   button.principale { background: var(--blu); color:#fff; border:0; border-radius: 10px; padding: 13px 16px; font-size: 16px; font-weight:700; width:100%; }
   button.secondario { background:#e8e8e8; color:#222; border:0; border-radius: 10px; padding: 12px 14px; font-size: 14px; }
   .barra { position: fixed; left:0; right:0; bottom:0; background:#fff; border-top: 1px solid #ddd; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); display:flex; gap:8px; }
@@ -39,13 +43,23 @@
   .aiuto { font-size: 13px; color: var(--grigio); line-height: 1.5; }
   .nascosto { display:none; }
   .piccolo { font-size: 12px; color: var(--grigio); }
+  .modale { position: fixed; inset: 0; background: rgba(0,0,0,.45); display:none; align-items:flex-end; justify-content:center; z-index: 10; }
+  .modale.aperta { display:flex; }
+  .foglio { background:#fff; width:100%; max-width:680px; border-radius: 16px 16px 0 0; padding: 18px 16px 24px; max-height: 88vh; overflow:auto; }
+  .carta-foto { width: 100%; max-height: 50vh; object-fit: contain; background: #fff; border-radius: 10px; }
+  .carta-dati { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; margin: 12px 0; }
+  .carta-dati dt { color: var(--grigio); }
+  .carta-dati dd { margin: 0; font-weight: 600; }
+  .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  .consiglio p { margin: 4px 0 0; }
+  .miniatura { width: 100%; max-height: 160px; object-fit: contain; background:#fff; border-radius: 8px; margin-bottom: 8px; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Gestione Pescheria da Massimo</h1>
-  <p>Menu, prezzi, pesce del giorno e numero WhatsApp</p>
+  <p>Menu, prezzi, pesce del giorno e Natale</p>
 </header>
 
 <main>
@@ -58,67 +72,91 @@
     <button class="principale" id="btnAccedi">Entra</button>
   </section>
 
-  <!-- EDITOR -->
   <div id="editor" class="nascosto">
-    <section>
-      <h2>Ordini</h2>
-      <label for="whatsapp">Numero WhatsApp della pescheria</label>
-      <input id="whatsapp" type="tel" inputmode="numeric" placeholder="39 333 1234567">
-      <p class="piccolo">Scrivilo con il prefisso 39, senza spazi: es. 393331234567.</p>
-      <label for="entro">Ordini entro (testo che vede il cliente)</label>
-      <input id="entro" type="text" placeholder="18:00 del giorno prima">
-    </section>
+    <nav class="schede">
+      <button data-scheda-btn="menu" class="attiva">Menu</button>
+      <button data-scheda-btn="pesce">Pesce del giorno</button>
+      <button data-scheda-btn="natale">Natale</button>
+    </nav>
 
-    <section>
-      <h2>Pesce di oggi</h2>
-      <label for="evidenza">Voce in evidenza in cima alla pagina</label>
-      <select id="evidenza"></select>
-      <p class="piccolo">Una sola voce alla volta. Scegli "Nessuna" per non mostrarla.</p>
-    </section>
+    <!-- SCHEDA MENU -->
+    <div data-scheda="menu">
+      <section>
+        <h2>Menu</h2>
+        <div id="categorie"></div>
+      </section>
 
-    <section>
-      <h2>Menu</h2>
-      <div id="categorie"></div>
-    </section>
+      <section>
+        <h2>Aggiungi dal catalogo</h2>
+        <label for="catalogo">Specie</label>
+        <select id="catalogo"></select>
+        <button class="secondario" id="btnCatalogo" style="width:100%;margin-top:10px">Aggiungi specie</button>
+        <p class="piccolo" style="margin-top:8px">La specie viene aggiunta come "non in vendita": imposta il prezzo e spunta "In vendita".</p>
+      </section>
 
-    <section>
-      <h2>Aggiungi dal catalogo</h2>
-      <label for="catalogo">Specie</label>
-      <select id="catalogo"></select>
-      <button class="secondario" id="btnCatalogo" style="width:100%;margin-top:10px">Aggiungi specie</button>
-      <p class="piccolo" style="margin-top:8px">La specie viene aggiunta come "non in vendita": imposta il prezzo e spunta "In vendita".</p>
-    </section>
-
-    <section>
-      <h2>Aggiungi una voce</h2>
-      <label for="nuovaCat">Categoria</label>
-      <select id="nuovaCat"></select>
-      <label for="nuovoNome">Nome</label>
-      <input id="nuovoNome" type="text" placeholder="Es. Polpo fresco">
-      <label for="nuovaDesc">Descrizione (facoltativa)</label>
-      <input id="nuovaDesc" type="text" placeholder="Es. Pesce del giorno">
-      <div class="riga">
-        <div>
-          <label for="nuovoPrezzo">Prezzo (€)</label>
-          <input id="nuovoPrezzo" type="number" inputmode="decimal" step="0.01" min="0">
+      <section>
+        <h2>Aggiungi una voce</h2>
+        <label for="nuovaCat">Categoria</label>
+        <select id="nuovaCat"></select>
+        <label for="nuovoNome">Nome</label>
+        <input id="nuovoNome" type="text" placeholder="Es. Polpo fresco">
+        <label for="nuovaDesc">Descrizione (facoltativa)</label>
+        <input id="nuovaDesc" type="text" placeholder="Es. Pesce del giorno">
+        <div class="campi" style="grid-template-columns:1fr 1fr">
+          <div>
+            <label for="nuovoPrezzo">Prezzo (€)</label>
+            <input id="nuovoPrezzo" type="number" inputmode="decimal" step="0.01" min="0">
+          </div>
+          <div>
+            <label for="nuovaUnita">Vendita</label>
+            <select id="nuovaUnita">
+              <option value="">a porzione</option>
+              <option value="kg">al kg</option>
+              <option value="etto">all'etto</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label for="nuovaUnita">Vendita</label>
-          <select id="nuovaUnita">
-            <option value="">a porzione</option>
-            <option value="kg">al kg</option>
-            <option value="etto">all'etto</option>
-          </select>
-        </div>
-      </div>
-      <p class="piccolo" style="margin-top:8px">Le foto si aggiungono in un secondo momento.</p>
-      <button class="secondario" id="btnAggiungi" style="width:100%;margin-top:10px">Aggiungi al menu</button>
-    </section>
+        <button class="secondario" id="btnAggiungi" style="width:100%;margin-top:10px">Aggiungi al menu</button>
+      </section>
+    </div>
+
+    <!-- SCHEDA PESCE DEL GIORNO -->
+    <div data-scheda="pesce" class="nascosto">
+      <section>
+        <h2>Ordini</h2>
+        <label for="whatsapp">Numero WhatsApp della pescheria</label>
+        <input id="whatsapp" type="tel" inputmode="numeric" placeholder="39 333 1234567">
+        <p class="piccolo">Scrivilo con il prefisso 39, senza spazi: es. 393331234567.</p>
+        <label for="entro">Ordini entro (testo che vede il cliente)</label>
+        <input id="entro" type="text" placeholder="18:00 del giorno prima">
+      </section>
+
+      <section>
+        <h2>Pesce di oggi</h2>
+        <label for="evidenza">Voce in evidenza in cima alla pagina</label>
+        <select id="evidenza"></select>
+        <p class="piccolo">Una sola voce alla volta. Scegli "Nessuna" per non mostrarla. Compare solo se è in vendita e non esaurita.</p>
+      </section>
+    </div>
+
+    <!-- SCHEDA NATALE -->
+    <div data-scheda="natale" class="nascosto">
+      <section>
+        <h2>Specialità di Natale</h2>
+        <p class="aiuto">Le proposte compaiono sul sito solo nelle date che imposti qui sotto. Fuori dalle date, la sezione è nascosta.</p>
+        <div id="natale"></div>
+      </section>
+    </div>
+
+    <p class="piccolo" style="margin-top:24px;text-align:center" id="cambiaCodice"></p>
   </div>
 
   <div class="stato" id="stato"></div>
-  <p class="piccolo" style="margin-top:24px;text-align:center" id="cambiaCodice"></p>
 </main>
+
+<div class="modale" id="anteprima" onclick="if (event.target.id === 'anteprima') chiudiAnteprima()">
+  <div class="foglio" id="anteprimaCorpo"></div>
+</div>
 
 <div class="barra nascosto" id="barra">
   <button class="secondario" id="btnRicarica">Ricarica</button>
@@ -135,180 +173,6 @@ const REPO = parti[0] || "";
 const BRANCH = "main";
 const FILE = "menu.json";
 const URL_API = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`;
-
-// ---- STATO ----
-let dati = null;   // contenuto di menu.json
-let sha = null;    // versione del file su GitHub, serve per salvare
-let sporco = false;
-
-// ---- UTILITY ----
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
-
-function messaggio(testo, tipo) {
-  const s = $("stato");
-  s.textContent = testo;
-  s.className = "stato " + tipo;
-}
-
-function codice() { try { return localStorage.getItem("pm_token") || ""; } catch (e) { return ""; } }
-function salvaCodice(c) { try { localStorage.setItem("pm_token", c); } catch (e) {} }
-function togliCodice() { try { localStorage.removeItem("pm_token"); } catch (e) {} }
-
-function decodifica(b64) {
-  const bin = atob(b64.replace(/\n/g, ""));
-  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-  return new TextDecoder("utf-8").decode(bytes);
-}
-function codifica(testo) {
-  const bytes = new TextEncoder().encode(testo);
-  let bin = "";
-  bytes.forEach(b => bin += String.fromCharCode(b));
-  return btoa(bin);
-}
-
-async function api(metodo, corpo) {
-  const r = await fetch(URL_API + (metodo === "GET" ? `?ref=${BRANCH}` : ""), {
-    method: metodo,
-    headers: {
-      "Authorization": "Bearer " + codice(),
-      "Accept": "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(corpo ? { "Content-Type": "application/json" } : {})
-    },
-    body: corpo ? JSON.stringify(corpo) : undefined,
-    cache: "no-store"
-  });
-  if (r.status === 401 || r.status === 403) throw new Error("codice non valido o senza permesso di modifica");
-  if (r.status === 404) throw new Error("repository o file non trovato");
-  if (!r.ok) throw new Error("errore GitHub " + r.status);
-  return r.json();
-}
-
-// ---- CARICAMENTO E SALVATAGGIO ----
-async function carica() {
-  if (!OWNER || !REPO) { messaggio("Questa pagina va aperta dall'indirizzo di GitHub Pages.", "err"); return; }
-  messaggio("Caricamento del menu…", "info");
-  try {
-    const f = await api("GET");
-    dati = JSON.parse(decodifica(f.content));
-    sha = f.sha;
-    sporco = false;
-    mostraEditor();
-    messaggio("Menu caricato.", "ok");
-  } catch (e) {
-    messaggio("Non riesco a caricare il menu: " + e.message, "err");
-  }
-}
-
-async function salva() {
-  if (!dati) return;
-  messaggio("Salvataggio in corso…", "info");
-  try {
-    const testo = JSON.stringify(dati, null, 2) + "\n";
-    const r = await api("PUT", {
-      message: "Aggiorna menu",
-      content: codifica(testo),
-      sha: sha,
-      branch: BRANCH
-    });
-    sha = r.content.sha;
-    sporco = false;
-    messaggio("Modifiche salvate. Il sito si aggiorna in 1-2 minuti.", "ok");
-  } catch (e) {
-    messaggio("Salvataggio non riuscito: " + e.message, "err");
-  }
-}
-
-// ---- EDITOR ----
-function segna() { sporco = true; }
-
-function tutteLeVoci() { return dati.categorie.flatMap(c => c.voci); }
-
-function mostraEditor() {
-  $("accesso").classList.add("nascosto");
-  $("editor").classList.remove("nascosto");
-  $("barra").classList.remove("nascosto");
-  $("cambiaCodice").innerHTML = `<a href="#" id="esci">Cambia codice di accesso</a>`;
-  $("esci").addEventListener("click", e => { e.preventDefault(); togliCodice(); location.reload(); });
-
-  $("whatsapp").value = dati.whatsapp || "";
-  $("entro").value = (dati.ritiro && dati.ritiro.ordini_entro) || "";
-
-  // pesce in evidenza
-  const ev = $("evidenza");
-  const pesce = dati.categorie.flatMap((c, ci) => c.voci.map((v, vi) => ({ v, ci, vi })));
-  ev.innerHTML = `<option value="">Nessuna</option>` + pesce.map(({ v, ci, vi }) =>
-    `<option value="${ci}:${vi}" ${v.in_evidenza ? "selected" : ""}>${esc(v.nome)}</option>`).join("");
-
-  // categorie e voci
-  $("categorie").innerHTML = dati.categorie.map((c, ci) => `
-    <h3>${esc(c.nome)}</h3>
-    ${c.periodo ? `<div class="campi">
-      <div><label>Visibile dal</label><input type="date" value="${esc(c.periodo.dal || "")}" onchange="aggiornaPeriodo(${ci},'dal',this.value)"></div>
-      <div><label>Fino al</label><input type="date" value="${esc(c.periodo.al || "")}" onchange="aggiornaPeriodo(${ci},'al',this.value)"></div>
-      <div><label>Ordini entro</label><input type="text" value="${esc(c.ordini_entro || "")}" onchange="aggiornaCampoCat(${ci},'ordini_entro',this.value)"></div>
-    </div>` : ""}
-    ${c.voci.map((v, vi) => `
-      <div class="voce">
-        <div class="campi" style="grid-template-columns:1fr">
-          ${campoTesto(ci, vi, "nome", "Nome del prodotto (togli \"da confermare\" quando è sicuro)", v)}
-        </div>
-        <div class="desc">${esc(v.descrizione || "")}</div>
-        <div class="campi">
-          <div>
-            <label>Prezzo €</label>
-            <input type="number" step="0.01" min="0" value="${v.prezzo ?? ""}" onchange="aggiornaPrezzo(${ci},${vi},this.value)">
-          </div>
-          <div>
-            <label>Vendita</label>
-            <select onchange="aggiornaUnita(${ci},${vi},this.value)">
-              <option value="" ${!v.unita ? "selected" : ""}>a porzione</option>
-              <option value="kg" ${v.unita === "kg" ? "selected" : ""}>al kg</option>
-              <option value="etto" ${v.unita === "etto" ? "selected" : ""}>all'etto</option>
-            </select>
-          </div>
-          <div>
-            <label class="check"><input type="checkbox" ${v.disponibile ? "checked" : ""} onchange="aggiornaDisponibile(${ci},${vi},this.checked)"> In vendita</label>
-          </div>
-        </div>
-        <div class="campi" style="grid-template-columns:1fr">
-          <div><label>Stato</label>
-            <select onchange="aggiornaCampo(${ci},${vi},'stato',this.value)">
-              <option value="disponibile" ${!v.stato || v.stato === "disponibile" ? "selected" : ""}>Disponibile</option>
-              <option value="esaurito" ${v.stato === "esaurito" ? "selected" : ""}>Esaurito (visibile al cliente, non ordinabile)</option>
-              <option value="terminato" ${v.stato === "terminato" ? "selected" : ""}>Terminato (nascosto al cliente)</option>
-            </select>
-          </div>
-        </div>
-        <div class="piccolo" style="margin-top:10px">Tracciabilità (lascia vuoto ciò che non sai, non viene mostrato)</div>
-        <div class="campi">
-          ${campoTesto(ci, vi, "nome_scientifico", "Nome scientifico", v)}
-          ${campoTesto(ci, vi, "zona_fao", "Zona FAO / paese", v)}
-          ${campoTesto(ci, vi, "metodo", "Metodo (pescato, allevato...)", v)}
-          ${campoTesto(ci, vi, "provenienza", "Provenienza / mercato", v)}
-          ${campoTesto(ci, vi, "data_arrivo", "Data di arrivo", v)}
-          ${campoTesto(ci, vi, "attrezzo", "Attrezzo di pesca", v)}
-          ${campoTesto(ci, vi, "allergeni", "Allergeni", v)}
-          ${campoTesto(ci, vi, "porzione", "Porzione (es. 300 g, vaschetta media)", v)}
-          ${campoTesto(ci, vi, "ora_arrivo", "Ora di arrivo (es. 07:30)", v)}
-          ${campoTesto(ci, vi, "consiglio", "Consiglio di cottura di Massimo", v)}
-        </div>
-        <div class="campi" style="grid-template-columns:1fr">
-          <div>
-            <label>Foto del prodotto ${v.foto ? `(attuale: ${esc(v.foto)})` : "(nessuna)"}</label>
-            <input type="file" accept="image/*" onchange="caricaFoto(${ci},${vi},this)">
-            <p class="piccolo">La foto viene ridimensionata e salvata nel sito. Poi premi Salva modifiche.</p>
-          </div>
-        </div>
-        <button class="elimina" onclick="eliminaVoce(${ci},${vi})">Elimina voce</button>
-      </div>`).join("")}
-  `).join("");
-
-  // categorie per nuova voce
-  $("nuovaCat").innerHTML = dati.categorie.map((c, ci) => `<option value="${ci}">${esc(c.nome)}</option>`).join("");
-  $("catalogo").innerHTML = CATALOGO.map((s, i) => `<option value="${i}">${esc(s.nome)} (${esc(s.scientifico)})</option>`).join("");
-}
 
 // Catalogo delle specie più comuni: il nome scientifico è di riferimento, da verificare con il fornitore
 const CATALOGO = [
@@ -343,6 +207,250 @@ const CATALOGO = [
   { nome: "Vongola", scientifico: "Ruditapes decussatus", unita: "kg" }
 ];
 
+// ---- STATO ----
+let dati = null;   // contenuto di menu.json
+let sha = null;    // versione del file su GitHub, serve per salvare
+let sporco = false;
+
+// ---- UTILITY ----
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+
+function messaggio(testo, tipo) {
+  const s = $("stato");
+  s.textContent = testo;
+  s.className = "stato " + tipo;
+}
+
+function codice() { try { return localStorage.getItem("pm_token") || ""; } catch (e) { return ""; } }
+function salvaCodice(c) { try { localStorage.setItem("pm_token", c); } catch (e) {} }
+function togliCodice() { try { localStorage.removeItem("pm_token"); } catch (e) {} }
+
+function decodifica(b64) {
+  const bin = atob(b64.replace(/\n/g, ""));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+function codifica(testo) {
+  const bytes = new TextEncoder().encode(testo);
+  let bin = "";
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+function intestazioni() {
+  return { "Authorization": "Bearer " + codice(), "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+}
+
+async function api(metodo, corpo) {
+  const r = await fetch(URL_API + (metodo === "GET" ? `?ref=${BRANCH}` : ""), {
+    method: metodo,
+    headers: { ...intestazioni(), ...(corpo ? { "Content-Type": "application/json" } : {}) },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+    cache: "no-store"
+  });
+  if (r.status === 401 || r.status === 403) throw new Error("codice non valido o senza permesso di modifica");
+  if (r.status === 404) throw new Error("repository o file non trovato");
+  if (!r.ok) throw new Error("errore GitHub " + r.status);
+  return r.json();
+}
+
+// ---- CARICAMENTO E SALVATAGGIO ----
+async function carica() {
+  if (!OWNER || !REPO) { messaggio("Questa pagina va aperta dall'indirizzo di GitHub Pages.", "err"); return; }
+  messaggio("Caricamento del menu…", "info");
+  try {
+    const f = await api("GET");
+    dati = JSON.parse(decodifica(f.content));
+    sha = f.sha;
+    sporco = false;
+    mostraEditor();
+    messaggio("Menu caricato.", "ok");
+  } catch (e) {
+    messaggio("Non riesco a caricare il menu: " + e.message, "err");
+  }
+}
+
+async function salva() {
+  if (!dati) return;
+  messaggio("Salvataggio in corso…", "info");
+  try {
+    const testo = JSON.stringify(dati, null, 2) + "\n";
+    const r = await api("PUT", { message: "Aggiorna menu", content: codifica(testo), sha: sha, branch: BRANCH });
+    sha = r.content.sha;
+    sporco = false;
+    messaggio("Modifiche salvate. Il sito si aggiorna in 1-2 minuti.", "ok");
+  } catch (e) {
+    messaggio("Salvataggio non riuscito: " + e.message, "err");
+  }
+}
+
+// ---- SCHEDE ----
+function mostraScheda(nome) {
+  document.querySelectorAll("[data-scheda]").forEach(el => el.classList.toggle("nascosto", el.dataset.scheda !== nome));
+  document.querySelectorAll("[data-scheda-btn]").forEach(b => b.classList.toggle("attiva", b.dataset.schedaBtn === nome));
+}
+document.querySelectorAll("[data-scheda-btn]").forEach(b => b.addEventListener("click", () => mostraScheda(b.dataset.schedaBtn)));
+
+// ---- EDITOR ----
+function segna() { sporco = true; }
+function tutteLeVoci() { return dati.categorie.flatMap(c => c.voci); }
+
+function mostraEditor() {
+  $("accesso").classList.add("nascosto");
+  $("editor").classList.remove("nascosto");
+  $("barra").classList.remove("nascosto");
+  $("cambiaCodice").innerHTML = `<a href="#" id="esci">Cambia codice di accesso</a>`;
+  $("esci").addEventListener("click", e => { e.preventDefault(); togliCodice(); location.reload(); });
+
+  $("whatsapp").value = dati.whatsapp || "";
+  $("entro").value = (dati.ritiro && dati.ritiro.ordini_entro) || "";
+
+  // pesce in evidenza
+  const pesce = dati.categorie.flatMap((c, ci) => c.voci.map((v, vi) => ({ v, ci, vi })));
+  $("evidenza").innerHTML = `<option value="">Nessuna</option>` + pesce.map(({ v, ci, vi }) =>
+    `<option value="${ci}:${vi}" ${v.in_evidenza ? "selected" : ""}>${esc(v.nome)}</option>`).join("");
+
+  // menu (senza Natale) e Natale
+  $("categorie").innerHTML = dati.categorie.filter(c => c.id !== "natale").map(c => bloccoCategoria(c)).join("");
+  const natale = dati.categorie.map((c, ci) => ({ c, ci })).find(x => x.c.id === "natale");
+  $("natale").innerHTML = natale ? bloccoCategoria(natale.c, natale.ci) : "<p class='aiuto'>Categoria Natale non trovata nel menu.</p>";
+
+  // categorie per nuova voce e catalogo
+  $("nuovaCat").innerHTML = dati.categorie.map((c, ci) => `<option value="${ci}">${esc(c.nome)}</option>`).join("");
+  $("catalogo").innerHTML = CATALOGO.map((s, i) => `<option value="${i}">${esc(s.nome)} (${esc(s.scientifico)})</option>`).join("");
+}
+
+// Blocco di una categoria: per Natale mostra anche le date e il termine ordini
+function bloccoCategoria(c, forzaCi) {
+  const ci = forzaCi !== undefined ? forzaCi : dati.categorie.indexOf(c);
+  const periodo = c.periodo ? `
+    <div class="campi">
+      <div><label>Visibile dal</label><input type="date" value="${esc(c.periodo.dal || "")}" onchange="aggiornaPeriodo(${ci},'dal',this.value)"></div>
+      <div><label>Fino al</label><input type="date" value="${esc(c.periodo.al || "")}" onchange="aggiornaPeriodo(${ci},'al',this.value)"></div>
+      <div><label>Ordini entro</label><input type="text" value="${esc(c.ordini_entro || "")}" onchange="aggiornaCampoCat(${ci},'ordini_entro',this.value)"></div>
+    </div>` : "";
+  return `
+    ${c.id !== "natale" ? `<h3>${esc(c.nome)}</h3>` : ""}
+    ${periodo}
+    ${c.voci.map((v, vi) => voceHtml(ci, vi, v)).join("")}
+    ${c.voci.length === 0 ? `<p class="piccolo">Nessuna proposta ancora: aggiungile da "Aggiungi una voce".</p>` : ""}`;
+}
+
+function campoTesto(ci, vi, k, etichetta, v) {
+  return `<div><label>${etichetta}</label><input type="text" value="${esc(v[k] || "")}" onchange="aggiornaCampo(${ci},${vi},'${k}',this.value)"></div>`;
+}
+
+function voceHtml(ci, vi, v) {
+  return `
+    <div class="voce">
+      <div class="campi uno">
+        ${campoTesto(ci, vi, "nome", "Nome del prodotto (togli \"da confermare\" quando è sicuro)", v)}
+      </div>
+      ${v.descrizione ? `<div class="desc">${esc(v.descrizione)}</div>` : ""}
+      <button class="secondario" style="width:100%;margin:8px 0" onclick="anteprima(${ci},${vi})">Vedi scheda come la vede il cliente</button>
+      <div class="campi">
+        <div>
+          <label>Prezzo €</label>
+          <input type="number" step="0.01" min="0" value="${v.prezzo ?? ""}" onchange="aggiornaPrezzo(${ci},${vi},this.value)">
+        </div>
+        <div>
+          <label>Vendita</label>
+          <select onchange="aggiornaUnita(${ci},${vi},this.value)">
+            <option value="" ${!v.unita ? "selected" : ""}>a porzione</option>
+            <option value="kg" ${v.unita === "kg" ? "selected" : ""}>al kg</option>
+            <option value="etto" ${v.unita === "etto" ? "selected" : ""}>all'etto</option>
+          </select>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" ${v.disponibile ? "checked" : ""} onchange="aggiornaDisponibile(${ci},${vi},this.checked)"> In vendita</label>
+        </div>
+      </div>
+      <div class="campi uno">
+        <div>
+          <label>Stato</label>
+          <select onchange="aggiornaCampo(${ci},${vi},'stato',this.value)">
+            <option value="disponibile" ${!v.stato || v.stato === "disponibile" ? "selected" : ""}>Disponibile</option>
+            <option value="esaurito" ${v.stato === "esaurito" ? "selected" : ""}>Esaurito (visibile al cliente, non ordinabile)</option>
+            <option value="terminato" ${v.stato === "terminato" ? "selected" : ""}>Terminato (nascosto al cliente)</option>
+          </select>
+        </div>
+      </div>
+      <details>
+        <summary>Foto</summary>
+        ${v.foto ? `<img class="miniatura" src="${esc(v.foto)}" alt="">` : ""}
+        <label>Carica una foto (si ridimensiona da sola)</label>
+        <input type="file" accept="image/*" onchange="caricaFoto(${ci},${vi},this)">
+      </details>
+      <details>
+        <summary>Scheda del pesce e tracciabilità</summary>
+        <p class="piccolo">Lascia vuoto ciò che non sai: non viene mostrato al cliente.</p>
+        <div class="campi">
+          ${campoTesto(ci, vi, "nome_scientifico", "Nome scientifico", v)}
+          ${campoTesto(ci, vi, "zona_fao", "Zona FAO / paese", v)}
+          ${campoTesto(ci, vi, "metodo", "Metodo (pescato, allevato...)", v)}
+          ${campoTesto(ci, vi, "provenienza", "Provenienza / mercato", v)}
+          ${campoTesto(ci, vi, "data_arrivo", "Data di arrivo", v)}
+          ${campoTesto(ci, vi, "ora_arrivo", "Ora di arrivo (es. 07:30)", v)}
+          ${campoTesto(ci, vi, "attrezzo", "Attrezzo di pesca", v)}
+          ${campoTesto(ci, vi, "allergeni", "Allergeni", v)}
+          ${campoTesto(ci, vi, "porzione", "Porzione (es. 300 g)", v)}
+        </div>
+        <div class="campi uno" style="margin-top:8px">
+          ${campoTesto(ci, vi, "consiglio", "Consiglio di cottura di Massimo", v)}
+        </div>
+      </details>
+      <button class="elimina" onclick="eliminaVoce(${ci},${vi})">Elimina voce</button>
+    </div>`;
+}
+
+// ---- MODIFICHE AI DATI ----
+function aggiornaCampo(ci, vi, k, val) { dati.categorie[ci].voci[vi][k] = val.trim(); segna(); }
+function aggiornaPrezzo(ci, vi, val) { dati.categorie[ci].voci[vi].prezzo = Number(val) || 0; segna(); }
+function aggiornaUnita(ci, vi, val) { dati.categorie[ci].voci[vi].unita = val || null; segna(); }
+function aggiornaDisponibile(ci, vi, val) { dati.categorie[ci].voci[vi].disponibile = val; segna(); }
+function aggiornaPeriodo(ci, k, val) { dati.categorie[ci].periodo[k] = val; segna(); }
+function aggiornaCampoCat(ci, k, val) { dati.categorie[ci][k] = val.trim(); segna(); }
+
+function leggiTestate() {
+  dati.whatsapp = $("whatsapp").value.replace(/\D/g, "");
+  dati.ritiro = dati.ritiro || {};
+  dati.ritiro.ordini_entro = $("entro").value.trim();
+  // una sola voce in evidenza
+  tutteLeVoci().forEach(v => delete v.in_evidenza);
+  const sel = $("evidenza").value;
+  if (sel) {
+    const [ci, vi] = sel.split(":").map(Number);
+    dati.categorie[ci].voci[vi].in_evidenza = true;
+  }
+}
+
+function eliminaVoce(ci, vi) {
+  const v = dati.categorie[ci].voci[vi];
+  if (!confirm(`Eliminare "${v.nome}" dal menu?`)) return;
+  leggiTestate();
+  dati.categorie[ci].voci.splice(vi, 1);
+  segna();
+  mostraEditor();
+}
+
+function aggiungiVoce() {
+  const nome = $("nuovoNome").value.trim();
+  if (!nome || !$("nuovoPrezzo").value) { messaggio("Inserisci almeno nome e prezzo.", "err"); return; }
+  const ci = Number($("nuovaCat").value);
+  dati.categorie[ci].voci.push({
+    id: slugNome(nome), nome,
+    descrizione: $("nuovaDesc").value.trim(),
+    prezzo: Number($("nuovoPrezzo").value),
+    unita: $("nuovaUnita").value || null,
+    disponibile: true, stato: "disponibile"
+  });
+  leggiTestate();
+  $("nuovoNome").value = ""; $("nuovaDesc").value = ""; $("nuovoPrezzo").value = "";
+  segna();
+  mostraEditor();
+  messaggio(`"${nome}" aggiunto al menu. Ricordati di salvare.`, "info");
+}
+
 function slugNome(s) {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36).slice(-4);
 }
@@ -368,11 +476,6 @@ function aggiungiDaCatalogo() {
 }
 
 // ---- FOTO ----
-function intestazioni() {
-  return { "Authorization": "Bearer " + codice(), "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
-}
-
-// Ridimensiona la foto a max 900 px e la converte in JPEG leggero
 function ridimensionaFoto(file, max) {
   return new Promise((ok, ko) => {
     const img = new Image();
@@ -410,12 +513,12 @@ async function caricaFoto(ci, vi, input) {
     const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${percorso}`;
 
     // Se la foto esiste già, serve il suo codice (sha) per sostituirla
-    let sha = null;
+    let fotoSha = null;
     const attuale = await fetch(`${url}?ref=${BRANCH}`, { headers: intestazioni(), cache: "no-store" });
-    if (attuale.ok) sha = (await attuale.json()).sha;
+    if (attuale.ok) fotoSha = (await attuale.json()).sha;
 
     const corpo = { message: `Foto ${v.nome}`, content: contenuto, branch: BRANCH };
-    if (sha) corpo.sha = sha;
+    if (fotoSha) corpo.sha = fotoSha;
     const r = await fetch(url, {
       method: "PUT",
       headers: { ...intestazioni(), "Content-Type": "application/json" },
@@ -433,73 +536,29 @@ async function caricaFoto(ci, vi, input) {
   }
 }
 
-// Periodo di visibilità e termine ordini della categoria (es. Natale)
-function aggiornaPeriodo(ci, k, val) {
-  dati.categorie[ci].periodo[k] = val; segna();
-}
-function aggiornaCampoCat(ci, k, val) {
-  dati.categorie[ci][k] = val.trim(); segna();
-}
-
-// Campo di testo della tracciabilità: salva direttamente nei dati del menu
-function campoTesto(ci, vi, k, etichetta, v) {
-  return `<div><label>${etichetta}</label><input type="text" value="${esc(v[k] || "")}" onchange="aggiornaCampo(${ci},${vi},'${k}',this.value)"></div>`;
-}
-function aggiornaCampo(ci, vi, k, val) {
-  dati.categorie[ci].voci[vi][k] = val.trim(); segna();
-}
-
-function aggiornaPrezzo(ci, vi, val) {
-  dati.categorie[ci].voci[vi].prezzo = Number(val) || 0; segna();
-}
-function aggiornaUnita(ci, vi, val) {
-  dati.categorie[ci].voci[vi].unita = val || null; segna();
-}
-function aggiornaDisponibile(ci, vi, val) {
-  dati.categorie[ci].voci[vi].disponibile = val; segna();
-}
-function eliminaVoce(ci, vi) {
+// ---- ANTEPRIMA DELLA SCHEDA (come la vede il cliente) ----
+function anteprima(ci, vi) {
   const v = dati.categorie[ci].voci[vi];
-  if (!confirm(`Eliminare "${v.nome}" dal menu?`)) return;
-  leggiTestate(); // salva prima le modifiche ancora a schermo, con gli indici giusti
-  dati.categorie[ci].voci.splice(vi, 1);
-  segna();
-  mostraEditor();
+  const righe = [];
+  if (v.nome_scientifico) righe.push(["Nome scientifico", `<i>${esc(v.nome_scientifico)}</i>`]);
+  if (v.zona_fao) righe.push([v.metodo && /allev/i.test(v.metodo) ? "Paese di allevamento" : "Zona di pesca (FAO)", esc(v.zona_fao)]);
+  if (v.metodo) righe.push(["Metodo", esc(v.metodo)]);
+  if (v.attrezzo) righe.push(["Pescato con", esc(v.attrezzo)]);
+  if (v.provenienza) righe.push(["Dal mercato", esc(v.provenienza)]);
+  if (v.data_arrivo || v.ora_arrivo) righe.push(["Arrivato", esc([v.data_arrivo, v.ora_arrivo ? "alle " + v.ora_arrivo : ""].filter(Boolean).join(" "))]);
+  if (v.allergeni) righe.push(["Allergeni", esc(v.allergeni)]);
+  if (v.porzione) righe.push(["Porzione", esc(v.porzione)]);
+  const consiglio = v.consiglio ? `<div class="consiglio"><b>Il consiglio di Massimo</b><p>${esc(v.consiglio)}</p></div>` : "";
+  $("anteprimaCorpo").innerHTML = `
+    <p class="piccolo">Anteprima: così la vede il cliente (usa anche i dati non ancora salvati)</p>
+    ${v.foto ? `<img class="carta-foto" src="${esc(v.foto)}" alt="">` : ""}
+    <h3>${esc(v.nome)}</h3>
+    ${righe.length ? `<dl class="carta-dati">${righe.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>` : `<p class="piccolo">Nessun dato di tracciabilità ancora inserito.</p>`}
+    ${consiglio}
+    <button class="secondario" style="width:100%;margin-top:14px" onclick="chiudiAnteprima()">Chiudi</button>`;
+  $("anteprima").classList.add("aperta");
 }
-
-function aggiungiVoce() {
-  const nome = $("nuovoNome").value.trim();
-  const prezzo = Number($("nuovoPrezzo").value);
-  if (!nome || !$("nuovoPrezzo").value) { messaggio("Inserisci almeno nome e prezzo.", "err"); return; }
-  const ci = Number($("nuovaCat").value);
-  const id = nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36).slice(-4);
-  dati.categorie[ci].voci.push({
-    id,
-    nome,
-    descrizione: $("nuovaDesc").value.trim(),
-    prezzo,
-    unita: $("nuovaUnita").value || null,
-    disponibile: true
-  });
-  leggiTestate();
-  $("nuovoNome").value = ""; $("nuovaDesc").value = ""; $("nuovoPrezzo").value = "";
-  segna();
-  mostraEditor();
-  messaggio(`"${nome}" aggiunto al menu. Ricordati di salvare.`, "info");
-}
-
-function leggiTestate() {
-  dati.whatsapp = $("whatsapp").value.replace(/\D/g, "");
-  dati.ritiro = dati.ritiro || {};
-  dati.ritiro.ordini_entro = $("entro").value.trim();
-  // una sola voce in evidenza
-  tutteLeVoci().forEach(v => delete v.in_evidenza);
-  const sel = $("evidenza").value;
-  if (sel) {
-    const [ci, vi] = sel.split(":").map(Number);
-    dati.categorie[ci].voci[vi].in_evidenza = true;
-  }
-}
+function chiudiAnteprima() { $("anteprima").classList.remove("aperta"); }
 
 // ---- EVENTI ----
 $("btnAccedi").addEventListener("click", () => {
@@ -518,6 +577,7 @@ $("btnCatalogo").addEventListener("click", aggiungiDaCatalogo);
 window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault(); e.returnValue = ""; } });
 
 // ---- AVVIO ----
+mostraScheda("menu");
 if (codice()) {
   carica();
 } else {
