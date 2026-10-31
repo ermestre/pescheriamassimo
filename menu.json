@@ -185,6 +185,24 @@
           "su_ordinazione": true,
           "ordini_entro": "16:00 del giorno stesso",
           "disponibile": true
+        },
+        {
+          "id": "frittura-calamari-xgoq",
+          "nome": "frittura calamari",
+          "descrizione": "",
+          "prezzo": 19,
+          "unita": "kg",
+          "disponibile": true,
+          "stato": "disponibile"
+        },
+        {
+          "id": "frittura-acciughe-y1zt",
+          "nome": "frittura acciughe",
+          "descrizione": "",
+          "prezzo": 4,
+          "unita": null,
+          "disponibile": true,
+          "stato": "disponibile"
         }
       ]
     },
