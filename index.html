@@ -319,6 +319,8 @@ function chiudiCarta() { document.getElementById("carta").classList.remove("aper
 function aggiungiDaCarta(id) { cambia(id, 1); chiudiCarta(); }
 
 // ---- AVVIO ----
+// Chiude eventuali riquadri rimasti aperti (scheda pesce, riepilogo): evita il velo blu
+document.querySelectorAll(".modale").forEach(m => m.classList.remove("aperta"));
 riempiRitiro();
 fetch("menu.json", { cache: "no-store" })
   .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
