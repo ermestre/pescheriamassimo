@@ -166,7 +166,8 @@
           "attrezzo": "",
           "allergeni": "",
           "disponibile": false,
-          "stato": "disponibile"
+          "stato": "disponibile",
+          "in_evidenza": true
         }
       ]
     },
