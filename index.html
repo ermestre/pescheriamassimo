@@ -99,6 +99,8 @@
     <select id="ora"></select>
     <label for="nome">Il tuo nome</label>
     <input id="nome" type="text" placeholder="Es. Rossi" autocomplete="name">
+    <label for="cellulare">Il tuo cellulare (facoltativo)</label>
+    <input id="cellulare" type="tel" inputmode="tel" placeholder="Es. 333 1234567" autocomplete="tel">
     <label for="note">Note (facoltative)</label>
     <textarea id="note" placeholder="Es. pulire il pesce, taglio a tranci..."></textarea>
   </div>
@@ -270,10 +272,11 @@ function testoOrdine() {
     return `- ${fmtQ(r.qta)} x ${r.voce.nome}${u}${peso ? ` = ${peso}` : ""}`;
   });
   const nome = document.getElementById("nome").value.trim() || "(senza nome)";
+  const cell = document.getElementById("cellulare").value.replace(/\s+/g, "");
   const giorno = document.getElementById("giorno").value;
   const ora = document.getElementById("ora").value;
   const note = document.getElementById("note").value.trim();
-  let t = `Ordine Pescheria da Massimo\nNome: ${nome}\nRitiro: ${giorno} alle ${ora}\n\n${righe.join("\n")}\n\nTotale indicativo: ${fmt(totale())}`;
+  let t = `Ordine Pescheria da Massimo\nNome: ${nome}${cell ? `\nCellulare: ${cell}` : ""}\nRitiro: ${giorno} alle ${ora}\n\n${righe.join("\n")}\n\nTotale indicativo: ${fmt(totale())}`;
   if (note) t += `\n\nNote: ${note}`;
   return t;
 }
