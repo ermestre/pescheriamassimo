@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Somma ordini - Pescheria da Massimo</title>
+<style>
+  :root { --blu:#1f3b5c; --sabbia:#f6f1e7; --oro:#e0a526; --grigio:#6b6b6b; --rosso:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--sabbia); color:#222; padding-bottom: 40px; }
+  header { background: var(--blu); color:#fff; padding: 16px; }
+  header h1 { margin:0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity:.85; }
+  main { max-width: 680px; margin: 0 auto; padding: 0 12px; }
+  section { background:#fff; border-radius: 12px; padding: 14px; margin-top: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  h2 { font-size: 15px; color: var(--blu); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .5px; }
+  textarea { width:100%; min-height: 180px; padding: 10px; font-size: 15px; border:1px solid #ccc; border-radius: 8px; font-family: inherit; }
+  .aiuto { font-size: 13px; color: var(--grigio); line-height: 1.5; margin: 0 0 8px; }
+  .bottoni { display:flex; gap:8px; margin-top: 10px; }
+  button { border:0; border-radius: 10px; padding: 12px 14px; font-size: 15px; font-weight: 700; cursor:pointer; }
+  .principale { background: var(--blu); color:#fff; flex:2; }
+  .secondario { background:#e8e8e8; color:#222; flex:1; }
+  .kpi { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi div { background: var(--sabbia); border-radius: 10px; padding: 12px; text-align:center; }
+  .kpi b { display:block; font-size: 22px; color: var(--blu); }
+  .kpi span { font-size: 12px; color: var(--grigio); }
+  table { width:100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align:left; padding: 9px 4px; border-bottom: 1px solid #eee; }
+  th { font-size: 12px; color: var(--grigio); text-transform: uppercase; }
+  td.num, th.num { text-align:right; white-space: nowrap; }
+  .ordine { border-top: 1px solid #eee; padding: 10px 0; font-size: 14px; }
+  .ordine:first-of-type { border-top: 0; }
+  .ordine .testa { font-weight: 700; display:flex; justify-content:space-between; gap:8px; }
+  .ordine ul { margin: 6px 0 0; padding-left: 18px; color:#444; }
+  .avviso { background:#fdecea; color: var(--rosso); border-radius: 8px; padding: 10px; font-size: 14px; margin-top: 10px; }
+  .vuoto { color: var(--grigio); font-size: 14px; }
+  .spunte { margin-top: 6px; }
+  .spunte label { margin-right: 16px; font-size: 14px; }
+  .spunte input { width: 18px; height: 18px; vertical-align: middle; }
+  .stato { font-size: 14px; color: var(--grigio); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Somma ordini</h1>
+  <p>Incolla i messaggi degli ordini ricevuti su WhatsApp</p>
+</header>
+
+<main>
+  <section>
+    <h2>Ordini della serata</h2>
+    <p class="aiuto">Copia dal telefono i messaggi degli ordini e incollali qui sotto, uno dopo l'altro. Il testo e le spunte "Pagato" e "Ritirato" restano salvati solo su questo telefono, per la serata di oggi.</p>
+    <textarea id="testo" placeholder="Incolla qui gli ordini..."></textarea>
+    <div class="bottoni">
+      <button class="secondario" id="pulisci">Svuota</button>
+      <button class="principale" id="calcola">Calcola</button>
+    </div>
+    <div class="stato" id="stato"></div>
+  </section>
+
+  <div id="risultato"></div>
+</main>
+
+<script>
+const FILE_MENU = "menu.json";
+let menu = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const fmt = n => n.toFixed(2).replace(".", ",") + " €";
+
+function tutteLeVoci() { return menu.categorie.flatMap(c => c.voci); }
+
+// Trova la voce del menu dal nome scritto nell'ordine
+function trova(nome) {
+  const voci = tutteLeVoci();
+  const n = nome.trim().toLowerCase();
+  return voci.find(v => v.nome.toLowerCase() === n)
+      || voci.find(v => v.nome.toLowerCase().startsWith(n))
+      || voci.find(v => n.startsWith(v.nome.toLowerCase()))
+      || null;
+}
+
+// Legge il testo incollato e lo divide in ordini
+function leggiOrdini(testo) {
+  const ordini = [];
+  let cur = null;
+  const nuovo = () => { cur = { nome: "", ritiro: "", righe: [] }; ordini.push(cur); };
+
+  testo.split(/\r?\n/).forEach(raw => {
+    const r = raw.trim();
+    if (!r) return;
+    if (/^ordine\b/i.test(r)) { nuovo(); return; }
+    if (!cur) nuovo();
+
+    let m;
+    if ((m = r.match(/^Nome:\s*(.*)$/i))) cur.nome = m[1];
+    else if ((m = r.match(/^Ritiro:\s*(.*)$/i))) cur.ritiro = m[1];
+    else if (/^Totale/i.test(r) || /^Note:/i.test(r)) { /* ignorato */ }
+    else if ((m = r.match(/^-?\s*(\d+)\s*x\s*(.+?)\s*(?:\((kg|etto)\))?$/i))) {
+      cur.righe.push({ qta: parseInt(m[1], 10), nome: m[2].trim() });
+    }
+  });
+  return ordini.filter(o => o.righe.length > 0 || o.nome);
+}
+
+function calcola() {
+  const testo = $("testo").value;
+  if (!menu) { $("stato").textContent = "Il menu non è ancora caricato."; return; }
+  if (!testo.trim()) { $("stato").textContent = "Incolla prima gli ordini."; return; }
+  $("stato").textContent = "";
+
+  const ordini = leggiOrdini(testo);
+  const salvati = caricaStato();
+  const stessoTesto = salvati.testo === testo;
+  ordini.forEach((o, i) => { o.stato = (stessoTesto && salvati.stato && salvati.stato[i]) || {}; });
+  salvaStato(testo, ordini);
+  const perProdotto = {};   // id -> { voce, qta, importo }
+  const nonRiconosciuti = [];
+  let incasso = 0;
+
+  ordini.forEach(o => {
+    o.totale = 0;
+    o.righe.forEach(r => {
+      const v = trova(r.nome);
+      if (!v) { nonRiconosciuti.push(`${r.qta} x ${r.nome} (ordine di ${o.nome || "senza nome"})`); return; }
+      const importo = v.prezzo * r.qta;
+      o.totale += importo;
+      incasso += importo;
+      if (!perProdotto[v.id]) perProdotto[v.id] = { voce: v, qta: 0, importo: 0 };
+      perProdotto[v.id].qta += r.qta;
+      perProdotto[v.id].importo += importo;
+    });
+  });
+
+  const incassato = ordini.filter(o => o.stato.pagato).reduce((s, o) => s + o.totale, 0);
+  const righeProdotti = Object.values(perProdotto).sort((a, b) => b.importo - a.importo);
+  const unita = v => v.unita ? v.unita : "porzioni";
+
+  // Testo da copiare
+  const riepilogo = [
+    `Riepilogo serata`,
+    `Ordini: ${ordini.length}`,
+    `Incassato: ${fmt(incassato)} · da incassare: ${fmt(incasso - incassato)}`,
+    ``,
+    `Da preparare:`,
+    ...righeProdotti.map(p => `- ${p.qta} ${unita(p.voce)} ${p.voce.nome}: ${fmt(p.importo)}`)
+  ].join("\n");
+
+  $("risultato").innerHTML = `
+    <section>
+      <h2>Riepilogo</h2>
+      <div class="kpi">
+        <div><b>${ordini.length}</b><span>ordini</span></div>
+        <div><b>${fmt(incassato)}</b><span>incassato</span></div>
+        <div><b>${fmt(incasso - incassato)}</b><span>da incassare</span></div>
+        <div><b>${ordini.filter(o => !o.stato.ritirato).length}</b><span>da ritirare</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Da preparare / da ordinare</h2>
+      ${righeProdotti.length ? `
+      <table>
+        <thead><tr><th>Prodotto</th><th class="num">Quantità</th><th class="num">Importo</th></tr></thead>
+        <tbody>
+          ${righeProdotti.map(p => `<tr><td>${esc(p.voce.nome)}</td><td class="num">${p.qta} ${esc(unita(p.voce))}</td><td class="num">${fmt(p.importo)}</td></tr>`).join("")}
+        </tbody>
+      </table>` : `<p class="vuoto">Nessun ordine riconosciuto.</p>`}
+      ${nonRiconosciuti.length ? `<div class="avviso">Non riconosciuti dal menu (controlla il nome):<br>${nonRiconosciuti.map(esc).join("<br>")}</div>` : ""}
+      <div class="bottoni"><button class="secondario" id="copia">Copia riepilogo</button></div>
+    </section>
+
+    <section>
+      <h2>Ordini</h2>
+      ${ordini.map((o, i) => `
+        <div class="ordine">
+          <div class="testa"><span>${esc(o.nome || "Senza nome")}</span><span>${fmt(o.totale)}</span></div>
+          <div>Ritiro: ${esc(o.ritiro || "non indicato")}</div>
+          <div class="spunte">
+            <label><input type="checkbox" data-i="${i}" data-k="pagato" ${o.stato.pagato ? "checked" : ""}> Pagato</label>
+            <label><input type="checkbox" data-i="${i}" data-k="ritirato" ${o.stato.ritirato ? "checked" : ""}> Ritirato</label>
+          </div>
+          <ul>${o.righe.map(r => `<li>${r.qta} x ${esc(r.nome)}</li>`).join("")}</ul>
+        </div>`).join("")}
+    </section>
+  `;
+
+  document.querySelectorAll('input[data-k]').forEach(c => c.addEventListener("change", () => {
+    ordini[Number(c.dataset.i)].stato[c.dataset.k] = c.checked;
+    salvaStato(testo, ordini);
+    calcola();
+  }));
+
+  $("copia").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(riepilogo); $("copia").textContent = "Copiato"; }
+    catch (e) { $("copia").textContent = "Copia non disponibile"; }
+  });
+}
+
+// Stato della serata: salvato solo su questo telefono, per la data di oggi
+const CHIAVE = "pm_somma_" + new Date().toISOString().slice(0, 10);
+function caricaStato() { try { return JSON.parse(localStorage.getItem(CHIAVE)) || {}; } catch (e) { return {}; } }
+function salvaStato(testo, ordini) {
+  const stato = {};
+  ordini.forEach((o, i) => { stato[i] = o.stato; });
+  try { localStorage.setItem(CHIAVE, JSON.stringify({ testo, stato })); } catch (e) {}
+}
+
+$("calcola").addEventListener("click", calcola);
+$("pulisci").addEventListener("click", () => { $("testo").value = ""; $("risultato").innerHTML = ""; $("stato").textContent = ""; });
+
+// Carica il menu per i prezzi
+fetch(FILE_MENU, { cache: "no-store" })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(d => {
+    menu = d;
+    const s = caricaStato();
+    if (s.testo) { $("testo").value = s.testo; calcola(); }
+    else $("stato").textContent = "Menu caricato. Puoi incollare gli ordini.";
+  })
+  .catch(() => { $("stato").textContent = "Il menu non si è caricato: apri la pagina dall'indirizzo di GitHub Pages."; });
+</script>
+</body>
+</html>

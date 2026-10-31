@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pescheria da Massimo</title>
+<style>
+  :root { --blu:#1f3b5c; --sabbia:#f6f1e7; --oro:#e0a526; --grigio:#6b6b6b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--sabbia); color:#222; padding-bottom: 120px; }
+  .hero { position: relative; height: 180px; background: var(--blu) center/cover no-repeat; }
+  .hero::after { content:""; position:absolute; inset:0; background: linear-gradient(transparent 30%, rgba(31,59,92,.92)); }
+  .hero-testo { position:absolute; left:0; right:0; bottom:14px; z-index:1; color:#fff; text-align:center; padding: 0 14px; }
+  .hero-testo h1 { margin:0; font-size: 26px; letter-spacing:.3px; }
+  .hero-testo p { margin:4px 0 0; font-size: 14px; opacity:.9; }
+  .fiducia { background: var(--blu); color:#fff; font-size: 13px; text-align:center; padding: 8px 12px 12px; }
+  .fiducia span { display:inline-block; margin: 2px 8px; }
+  main { max-width: 640px; margin: 0 auto; padding: 0 14px; }
+  h2 { font-size: 15px; color: var(--blu); margin: 26px 4px 10px; text-transform: uppercase; letter-spacing: .6px; }
+  .oggi { background:#fff; border-radius: 14px; overflow:hidden; margin-top: 16px; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+  .oggi img { width:100%; height: 200px; object-fit: cover; display:block; }
+  .oggi .corpo { padding: 12px 14px 14px; }
+  .etichetta { display:inline-block; background: var(--oro); color:#222; font-size: 12px; font-weight:700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; }
+  .card { background:#fff; border-radius:12px; padding:10px; margin-bottom:10px; display:flex; align-items:center; gap:12px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .card img { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; flex: none; background:#eee; }
+  .info { flex:1; min-width:0; }
+  .nome { font-weight:700; font-size: 16px; }
+  .desc { font-size: 13px; color: var(--grigio); margin-top:3px; }
+  .prezzo { font-weight:700; color: var(--blu); white-space:nowrap; font-size:15px; margin-top:4px; }
+  .prezzo small { font-weight:400; color: var(--grigio); font-size: 12px; }
+  .controlli { display:flex; align-items:center; gap:6px; flex: none; }
+  .btn { width:38px; height:38px; border-radius:50%; border:0; background: var(--blu); color:#fff; font-size:22px; line-height:1; cursor:pointer; }
+  .btn:disabled { background:#c9c9c9; cursor:default; }
+  .btn.piu { background: var(--oro); color:#222; font-weight:700; }
+  .qta { min-width:20px; text-align:center; font-weight:700; }
+  .ritiro { background:#fff; border-radius:12px; padding:14px; margin-top: 10px; }
+  .ritiro label { display:block; font-size: 13px; color: var(--grigio); margin: 10px 0 4px; }
+  select, textarea, input { width:100%; padding:11px; font-size:16px; border:1px solid #ccc; border-radius:8px; background:#fff; font-family: inherit; }
+  textarea { min-height: 60px; }
+  .come { background:#fff; border-radius:12px; padding:14px; margin-top: 10px; font-size: 14px; line-height: 1.5; }
+  .come ol { margin:0; padding-left: 20px; }
+  .barra { position: fixed; left:0; right:0; bottom:0; background: var(--blu); color:#fff; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .barra .tot { font-size: 15px; }
+  .barra button { background: var(--oro); color:#222; border:0; border-radius:10px; padding: 13px 18px; font-weight:700; font-size:16px; cursor:pointer; }
+  .barra button:disabled { background:#6d7f93; color:#dfe6ee; cursor:default; }
+  .modale { position: fixed; inset: 0; background: rgba(0,0,0,.45); display:none; align-items:flex-end; justify-content:center; }
+  .modale.aperta { display:flex; }
+  .foglio { background:#fff; width:100%; max-width:640px; border-radius: 16px 16px 0 0; padding: 18px 16px 24px; max-height: 88vh; overflow:auto; }
+  .foglio h3 { margin: 0 0 10px; color: var(--blu); }
+  .riepilogo { white-space: pre-wrap; background:#f4f4f4; border-radius:8px; padding:12px; font-size:14px; line-height:1.45; }
+  .azioni { display:flex; gap:10px; margin-top:14px; }
+  .azioni a, .azioni button { flex:1; text-align:center; text-decoration:none; padding:14px; border-radius:10px; font-weight:700; font-size:16px; border:0; cursor:pointer; }
+  .wa { background:#25d366; color:#fff; }
+  .copia { background:#e8e8e8; color:#222; }
+  .chiudi { display:block; margin:12px auto 0; background:none; border:0; color:var(--grigio); font-size:14px; cursor:pointer; }
+  .errore { background:#fdecea; color:#8a1c12; padding: 14px; border-radius: 10px; margin-top: 16px; font-size: 14px; }
+  footer { text-align:center; font-size:12px; color: var(--grigio); padding: 24px 12px; }
+</style>
+</head>
+<body>
+
+<div class="hero" id="hero">
+  <div class="hero-testo">
+    <h1>Pescheria da Massimo</h1>
+    <p>Ordina dal telefono, ritira in pescheria</p>
+  </div>
+</div>
+<div class="fiducia">
+  <span>✔ Pesce fresco del giorno</span>
+  <span>✔ Ordini entro <b id="entro">18:00 del giorno prima</b></span>
+  <span>✔ Pagamento al ritiro</span>
+</div>
+
+<main>
+  <div id="errore"></div>
+  <div id="oggi"></div>
+  <div id="menu"></div>
+
+  <h2>Scegli il ritiro</h2>
+  <div class="ritiro">
+    <label for="giorno">Giorno di ritiro</label>
+    <select id="giorno"></select>
+    <label for="ora">Orario</label>
+    <select id="ora"></select>
+    <label for="nome">Il tuo nome</label>
+    <input id="nome" type="text" placeholder="Es. Rossi" autocomplete="name">
+    <label for="note">Note (facoltative)</label>
+    <textarea id="note" placeholder="Es. pulire il pesce, taglio a tranci..."></textarea>
+  </div>
+
+  <h2>Come funziona</h2>
+  <div class="come">
+    <ol>
+      <li>Scegli i prodotti e le quantità.</li>
+      <li>Scegli giorno e orario di ritiro.</li>
+      <li>Invia l'ordine su WhatsApp: ti rispondiamo per confermare.</li>
+      <li>Ritiri in pescheria e paghi al banco.</li>
+    </ol>
+  </div>
+
+  <footer>Pescheria da Massimo</footer>
+</main>
+
+<div class="barra">
+  <div class="tot"><span id="conteggio">0</span> articoli · <strong id="totale">0,00 €</strong></div>
+  <button id="ordina" disabled>Ordina e ritira</button>
+</div>
+
+<div class="modale" id="modale">
+  <div class="foglio">
+    <h3>Riepilogo ordine</h3>
+    <div class="riepilogo" id="testo"></div>
+    <div class="azioni">
+      <a class="wa" id="linkWa" href="#" target="_blank" rel="noopener">Invia su WhatsApp</a>
+      <button class="copia" id="copia">Copia</button>
+    </div>
+    <button class="chiudi" id="chiudi">Chiudi</button>
+  </div>
+</div>
+
+<script>
+// ---- CONFIGURAZIONE (da completare) ----
+let NUMERO_WHATSAPP = "390000000000"; // valore di riserva: il numero reale viene letto da menu.json
+const GIORNO_CHIUSO = 1;                // 0 = domenica, 1 = lunedì (chiuso)
+const ORARI = ["09:00","09:30","10:00","10:30","11:00","11:30","12:00","17:00","17:30","18:00","18:30","19:00"];
+const ORARI_SERA = ["18:30","19:00","19:30","20:00"]; // ritiro serale per la frittura (riserva)
+
+// ---- STATO ----
+let menu = null;
+const carrello = {}; // id -> { voce, qta }
+
+const fmt = n => n.toFixed(2).replace(".", ",") + " €";
+const tutte = () => menu.categorie.flatMap(c => c.voci);
+
+function cardHtml(v) {
+  const q = carrello[v.id] ? carrello[v.id].qta : 0;
+  const unita = v.unita ? ` <small>/ ${v.unita}</small>` : "";
+  const foto = v.foto ? `<img src="${v.foto}" alt="${v.nome}" loading="lazy">` : "";
+  return `<div class="card">
+    ${foto}
+    <div class="info">
+      <div class="nome">${v.nome}</div>
+      <div class="desc">${v.descrizione || ""}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}</div>
+      <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
+    </div>
+    <div class="controlli">
+      <button class="btn" onclick="cambia('${v.id}',-1)" ${q === 0 ? "disabled" : ""} aria-label="Togli">−</button>
+      <span class="qta">${q}</span>
+      <button class="btn piu" onclick="cambia('${v.id}',1)" aria-label="Aggiungi">+</button>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const inEvidenza = tutte().find(v => v.in_evidenza && v.disponibile);
+  document.getElementById("oggi").innerHTML = inEvidenza ? `
+    <h2>Pesce di oggi</h2>
+    <div class="oggi">
+      <img src="${inEvidenza.foto}" alt="${inEvidenza.nome}">
+      <div class="corpo">
+        <span class="etichetta">Arrivato oggi</span>
+        ${cardHtml(inEvidenza).replace(/<img[^>]*>/, "")}
+      </div>
+    </div>` : "";
+
+  document.getElementById("menu").innerHTML = menu.categorie.map(c =>
+    `<h2>${c.nome}</h2>` + c.voci.filter(v => v.disponibile).map(cardHtml).join("")
+  ).join("");
+  aggiornaTotali();
+}
+
+function cambia(id, delta) {
+  const voce = tutte().find(v => v.id === id);
+  const attuale = carrello[id] ? carrello[id].qta : 0;
+  const nuova = Math.max(0, attuale + delta);
+  if (nuova === 0) delete carrello[id];
+  else carrello[id] = { voce, qta: nuova };
+  aggiornaOrari();
+  render();
+}
+
+// Se nel carrello c'è la frittura su ordinazione, il ritiro è solo serale
+function aggiornaOrari() {
+  const serve = Object.values(carrello).some(r => r.voce.su_ordinazione);
+  const serali = (menu && menu.ritiro && menu.ritiro.orari_sera) || ORARI_SERA;
+  const scelta = serve ? serali : ORARI;
+  const sel = document.getElementById("ora");
+  const prima = sel.value;
+  sel.innerHTML = scelta.map(o => `<option>${o}</option>`).join("");
+  if (scelta.includes(prima)) sel.value = prima;
+}
+
+function totale() {
+  return Object.values(carrello).reduce((s, r) => s + r.voce.prezzo * r.qta, 0);
+}
+
+function aggiornaTotali() {
+  const n = Object.values(carrello).reduce((s, r) => s + r.qta, 0);
+  document.getElementById("conteggio").textContent = n;
+  document.getElementById("totale").textContent = fmt(totale());
+  document.getElementById("ordina").disabled = n === 0;
+}
+
+// ---- RITIRO ----
+function riempiRitiro() {
+  const giorni = [];
+  const oggi = new Date();
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(oggi); d.setDate(oggi.getDate() + i);
+    if (d.getDay() === GIORNO_CHIUSO) continue;
+    const nome = d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+    giorni.push(nome.charAt(0).toUpperCase() + nome.slice(1));
+  }
+  document.getElementById("giorno").innerHTML = giorni.map(g => `<option>${g}</option>`).join("");
+  document.getElementById("ora").innerHTML = ORARI.map(o => `<option>${o}</option>`).join("");
+}
+
+// ---- ORDINE ----
+function testoOrdine() {
+  const righe = Object.values(carrello).map(r => {
+    const u = r.voce.unita ? ` (${r.voce.unita})` : "";
+    return `- ${r.qta} x ${r.voce.nome}${u}`;
+  });
+  const nome = document.getElementById("nome").value.trim() || "(senza nome)";
+  const giorno = document.getElementById("giorno").value;
+  const ora = document.getElementById("ora").value;
+  const note = document.getElementById("note").value.trim();
+  let t = `Ordine Pescheria da Massimo\nNome: ${nome}\nRitiro: ${giorno} alle ${ora}\n\n${righe.join("\n")}\n\nTotale indicativo: ${fmt(totale())}`;
+  if (note) t += `\n\nNote: ${note}`;
+  return t;
+}
+
+document.getElementById("ordina").addEventListener("click", () => {
+  const t = testoOrdine();
+  document.getElementById("testo").textContent = t;
+  document.getElementById("linkWa").href = `https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(t)}`;
+  document.getElementById("modale").classList.add("aperta");
+});
+document.getElementById("chiudi").addEventListener("click", () => document.getElementById("modale").classList.remove("aperta"));
+document.getElementById("copia").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(testoOrdine()); document.getElementById("copia").textContent = "Copiato"; }
+  catch (e) { document.getElementById("copia").textContent = "Seleziona e copia"; }
+});
+
+// ---- AVVIO ----
+riempiRitiro();
+fetch("menu.json", { cache: "no-store" })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(data => {
+    menu = data;
+    if (menu.foto_insegna) document.getElementById("hero").style.backgroundImage = `url('${menu.foto_insegna}')`;
+    if (menu.whatsapp) NUMERO_WHATSAPP = menu.whatsapp;
+    aggiornaOrari();
+    if (menu.ritiro && menu.ritiro.ordini_entro) document.getElementById("entro").textContent = menu.ritiro.ordini_entro;
+    render();
+  })
+  .catch(() => {
+    document.getElementById("errore").innerHTML = `<div class="errore">Il menu non si è caricato. Riprova tra poco.</div>`;
+  });
+</script>
+</body>
+</html>
