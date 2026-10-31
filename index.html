@@ -54,6 +54,7 @@
   .copia { background:#e8e8e8; color:#222; }
   .chiudi { display:block; margin:12px auto 0; background:none; border:0; color:var(--grigio); font-size:14px; cursor:pointer; }
   .errore { background:#fdecea; color:#8a1c12; padding: 14px; border-radius: 10px; margin-top: 16px; font-size: 14px; }
+  .arrivare { display:inline-block; margin-top:10px; background: var(--blu); color:#fff; text-decoration:none; padding: 10px 16px; border-radius: 8px; font-weight:700; font-size: 14px; }
   footer { text-align:center; font-size:12px; color: var(--grigio); padding: 24px 12px; }
 </style>
 </head>
@@ -98,7 +99,7 @@
     </ol>
   </div>
 
-  <footer>Pescheria da Massimo</footer>
+  <footer id="indirizzo">Pescheria da Massimo</footer>
 </main>
 
 <div class="barra">
@@ -250,6 +251,10 @@ fetch("menu.json", { cache: "no-store" })
     menu = data;
     if (menu.foto_insegna) document.getElementById("hero").style.backgroundImage = `url('${menu.foto_insegna}')`;
     if (menu.whatsapp) NUMERO_WHATSAPP = menu.whatsapp;
+    if (menu.indirizzo) document.getElementById("indirizzo").innerHTML = `
+      Pescheria da Massimo<br>${menu.indirizzo}<br>
+      <a class="arrivare" target="_blank" rel="noopener"
+         href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("Pescheria da Massimo, " + menu.indirizzo)}">Come arrivare</a>`;
     aggiornaOrari();
     if (menu.ritiro && menu.ritiro.ordini_entro) document.getElementById("entro").textContent = menu.ritiro.ordini_entro;
     render();
