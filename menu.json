@@ -15,7 +15,7 @@
           "allergeni": "",
           "nome": "Insalata di mare",
           "descrizione": "Calamari, polpo, sedano, limone, prezzemolo",
-          "prezzo": 12,
+          "prezzo": 12.00,
           "unita": null,
           "foto": "img/insalata-di-mare.jpg",
           "disponibile": true
@@ -25,7 +25,7 @@
           "allergeni": "",
           "nome": "Ragù di pesce",
           "descrizione": "Pasta a tubo (rigatoni, da confermare) con ragù di pesce",
-          "prezzo": 13,
+          "prezzo": 13.00,
           "unita": null,
           "foto": "img/ragu-di-pesce.jpg",
           "disponibile": true
@@ -35,7 +35,7 @@
           "allergeni": "",
           "nome": "Caponata di spada",
           "descrizione": "Pesce spada, melanzane, pomodorini, olive nere, basilico",
-          "prezzo": 11,
+          "prezzo": 11.00,
           "unita": null,
           "foto": "img/caponata-di-spada.jpg",
           "disponibile": true
@@ -45,7 +45,7 @@
           "allergeni": "",
           "nome": "Crema di scampi",
           "descrizione": "Crema di scampi con pastina (da confermare)",
-          "prezzo": 14,
+          "prezzo": 14.00,
           "unita": null,
           "foto": "img/crema-di-scampi.jpg",
           "disponibile": true
@@ -65,11 +65,12 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Spigola / Orata",
+          "nome": "Spigola / Orata (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 24,
+          "prezzo": 24.00,
           "unita": "kg",
           "foto": "img/spigola-orata.jpg",
+          "in_evidenza": true,
           "disponibile": true
         },
         {
@@ -81,13 +82,12 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Rombo / Sogliola",
+          "nome": "Rombo / Sogliola (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 28,
+          "prezzo": 28.00,
           "unita": "kg",
           "foto": "img/rombo-sogliola.jpg",
-          "disponibile": true,
-          "in_evidenza": true
+          "disponibile": true
         },
         {
           "id": "gamberi-rossi",
@@ -98,9 +98,9 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Gamberi rossi",
+          "nome": "Gamberi rossi (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 45,
+          "prezzo": 45.00,
           "unita": "kg",
           "foto": "img/gamberi-rossi.jpg",
           "disponibile": true
@@ -116,7 +116,7 @@
           "allergeni": "",
           "nome": "Gamberetti sgusciati",
           "descrizione": "Pronti da cucinare",
-          "prezzo": 2.5,
+          "prezzo": 2.50,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
@@ -130,9 +130,9 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Trancio di tonno",
+          "nome": "Trancio di tonno (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 35,
+          "prezzo": 35.00,
           "unita": "kg",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
@@ -148,26 +148,10 @@
           "allergeni": "",
           "nome": "Bianchetti (novellame)",
           "descrizione": "Pronti da cucinare",
-          "prezzo": 3.5,
+          "prezzo": 3.50,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
-        },
-        {
-          "id": "spigola-s738",
-          "nome": "Spigola",
-          "descrizione": "",
-          "prezzo": 0,
-          "unita": "kg",
-          "nome_scientifico": "Dicentrarchus labrax",
-          "zona_fao": "",
-          "metodo": "",
-          "provenienza": "",
-          "data_arrivo": "",
-          "attrezzo": "",
-          "allergeni": "",
-          "disponibile": false,
-          "stato": "disponibile"
         }
       ]
     },
@@ -180,24 +164,26 @@
           "allergeni": "",
           "nome": "Frittura di pesce",
           "descrizione": "Frittura mista preparata da Massimo ogni giorno",
-          "prezzo": 14,
+          "prezzo": 14.00,
           "unita": null,
           "su_ordinazione": true,
           "ordini_entro": "16:00 del giorno stesso",
           "disponibile": true
         }
       ]
+    },
+    {
+      "id": "natale",
+      "nome": "Specialità di Natale",
+      "periodo": { "dal": "", "al": "" },
+      "ordini_entro": "",
+      "voci": []
     }
   ],
   "ritiro": {
     "attivo": true,
     "ordini_entro": "18:00 del giorno prima",
-    "orari_sera": [
-      "18:30",
-      "19:00",
-      "19:30",
-      "20:00"
-    ],
+    "orari_sera": ["18:30", "19:00", "19:30", "20:00"],
     "finestre_ritiro": [],
     "chiusure": [],
     "nota": "Da compilare per il periodo natalizio: giorni e orari di ritiro"

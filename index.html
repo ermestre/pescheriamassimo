@@ -55,6 +55,7 @@
   .chiudi { display:block; margin:12px auto 0; background:none; border:0; color:var(--grigio); font-size:14px; cursor:pointer; }
   .errore { background:#fdecea; color:#8a1c12; padding: 14px; border-radius: 10px; margin-top: 16px; font-size: 14px; }
   .card.esaurito { opacity: .55; }
+  .ordini-cat { margin: -4px 4px 10px; font-size: 13px; color: #8a5a00; font-weight: 700; }
   .tag-esaurito { display:inline-block; background:#b3261e; color:#fff; font-size:11px; padding:2px 7px; border-radius: 999px; vertical-align: middle; margin-left: 6px; }
   .trace { font-size: 12px; color: var(--grigio); margin-top: 6px; line-height: 1.4; }
   .arrivare { display:inline-block; margin-top:10px; background: var(--blu); color:#fff; text-decoration:none; padding: 10px 16px; border-radius: 8px; font-weight:700; font-size: 14px; }
@@ -172,6 +173,14 @@ function cardHtml(v) {
   </div>`;
 }
 
+// Una categoria con periodo compare solo nelle date impostate; senza date resta nascosta
+function categoriaAttiva(c) {
+  if (!c.periodo) return true;
+  if (!c.periodo.dal || !c.periodo.al) return false;
+  const oggi = new Date().toLocaleDateString("sv-SE"); // formato AAAA-MM-GG
+  return oggi >= c.periodo.dal && oggi <= c.periodo.al;
+}
+
 function render() {
   const inEvidenza = tutte().find(v => v.in_evidenza && v.disponibile);
   document.getElementById("oggi").innerHTML = inEvidenza ? `
@@ -184,8 +193,8 @@ function render() {
       </div>
     </div>` : "";
 
-  document.getElementById("menu").innerHTML = menu.categorie.map(c =>
-    `<h2>${c.nome}</h2>` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")
+  document.getElementById("menu").innerHTML = menu.categorie.filter(categoriaAttiva).map(c =>
+    `<h2>${c.nome}</h2>${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")
   ).join("");
   aggiornaTotali();
 }
@@ -276,7 +285,7 @@ fetch("menu.json", { cache: "no-store" })
     if (menu.indirizzo) document.getElementById("indirizzo").innerHTML = `
       Pescheria da Massimo<br>${menu.indirizzo}<br>
       <a class="arrivare" target="_blank" rel="noopener"
-         href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("Pescheria da Massimo, " + menu.indirizzo)}">Come arrivare</a>`;
+         href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent("Pescheria da Massimo, " + menu.indirizzo)}&travelmode=driving">Come arrivare</a>`;
     aggiornaOrari();
     if (menu.ritiro && menu.ritiro.ordini_entro) document.getElementById("entro").textContent = menu.ritiro.ordini_entro;
     render();

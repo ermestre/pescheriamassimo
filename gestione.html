@@ -244,6 +244,11 @@ function mostraEditor() {
   // categorie e voci
   $("categorie").innerHTML = dati.categorie.map((c, ci) => `
     <h3>${esc(c.nome)}</h3>
+    ${c.periodo ? `<div class="campi">
+      <div><label>Visibile dal</label><input type="date" value="${esc(c.periodo.dal || "")}" onchange="aggiornaPeriodo(${ci},'dal',this.value)"></div>
+      <div><label>Fino al</label><input type="date" value="${esc(c.periodo.al || "")}" onchange="aggiornaPeriodo(${ci},'al',this.value)"></div>
+      <div><label>Ordini entro</label><input type="text" value="${esc(c.ordini_entro || "")}" onchange="aggiornaCampoCat(${ci},'ordini_entro',this.value)"></div>
+    </div>` : ""}
     ${c.voci.map((v, vi) => `
       <div class="voce">
         <div class="campi" style="grid-template-columns:1fr">
@@ -350,6 +355,14 @@ function aggiungiDaCatalogo() {
   segna();
   mostraEditor();
   messaggio(`${s.nome} aggiunto. Imposta il prezzo, spunta "In vendita" e salva.`, "info");
+}
+
+// Periodo di visibilità e termine ordini della categoria (es. Natale)
+function aggiornaPeriodo(ci, k, val) {
+  dati.categorie[ci].periodo[k] = val; segna();
+}
+function aggiornaCampoCat(ci, k, val) {
+  dati.categorie[ci][k] = val.trim(); segna();
 }
 
 // Campo di testo della tracciabilità: salva direttamente nei dati del menu
