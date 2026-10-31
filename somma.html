@@ -99,7 +99,7 @@ function leggiOrdini(testo) {
     if ((m = r.match(/^Nome:\s*(.*)$/i))) cur.nome = m[1];
     else if ((m = r.match(/^Ritiro:\s*(.*)$/i))) cur.ritiro = m[1];
     else if (/^Totale/i.test(r) || /^Note:/i.test(r)) { /* ignorato */ }
-    else if ((m = r.match(/^-?\s*(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s*(?:\((kg|etto)\))?$/i))) {
+    else if ((m = r.match(/^-?\s*(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s*(?:\((kg|etto)\))?(?:\s*=.*)?$/i))) {
       cur.righe.push({ qta: parseFloat(m[1].replace(",", ".")), nome: m[2].trim() });
     }
   });
