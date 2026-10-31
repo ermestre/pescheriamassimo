@@ -136,6 +136,7 @@ const carrello = {}; // id -> { voce, qta }
 const fmt = n => n.toFixed(2).replace(".", ",") + " €";
 const tutte = () => menu.categorie.flatMap(c => c.voci);
 
+const fmtQ = n => String(n).replace(".", ",");
 const escapa = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 // Riga di tracciabilità: compare solo per i campi compilati
 function traccia(v) {
@@ -165,7 +166,7 @@ function cardHtml(v) {
     </div>
     <div class="controlli">
       <button class="btn" onclick="cambia('${v.id}',-1)" ${q === 0 ? "disabled" : ""} aria-label="Togli">−</button>
-      <span class="qta">${q}</span>
+      <span class="qta">${fmtQ(q)}</span>
       <button class="btn piu" onclick="cambia('${v.id}',1)" ${esaurito ? "disabled" : ""} aria-label="Aggiungi">+</button>
     </div>
   </div>`;
@@ -192,7 +193,9 @@ function render() {
 function cambia(id, delta) {
   const voce = tutte().find(v => v.id === id);
   const attuale = carrello[id] ? carrello[id].qta : 0;
-  const nuova = Math.max(0, attuale + delta);
+  // kg: mezzo chilo per tocco; etto: un etto per tocco
+  const passo = voce.unita === "kg" ? 0.5 : 1;
+  const nuova = Math.max(0, Math.round((attuale + delta * passo) * 100) / 100);
   if (nuova === 0) delete carrello[id];
   else carrello[id] = { voce, qta: nuova };
   aggiornaOrari();
@@ -215,7 +218,7 @@ function totale() {
 }
 
 function aggiornaTotali() {
-  const n = Object.values(carrello).reduce((s, r) => s + r.qta, 0);
+  const n = Object.keys(carrello).length; // numero di prodotti diversi
   document.getElementById("conteggio").textContent = n;
   document.getElementById("totale").textContent = fmt(totale());
   document.getElementById("ordina").disabled = n === 0;
@@ -239,7 +242,7 @@ function riempiRitiro() {
 function testoOrdine() {
   const righe = Object.values(carrello).map(r => {
     const u = r.voce.unita ? ` (${r.voce.unita})` : "";
-    return `- ${r.qta} x ${r.voce.nome}${u}`;
+    return `- ${fmtQ(r.qta)} x ${r.voce.nome}${u}`;
   });
   const nome = document.getElementById("nome").value.trim() || "(senza nome)";
   const giorno = document.getElementById("giorno").value;

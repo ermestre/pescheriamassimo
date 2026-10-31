@@ -69,6 +69,7 @@ let menu = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 const fmt = n => n.toFixed(2).replace(".", ",") + " €";
+const fmtQ = n => String(n).replace(".", ",");
 
 function tutteLeVoci() { return menu.categorie.flatMap(c => c.voci); }
 
@@ -98,8 +99,8 @@ function leggiOrdini(testo) {
     if ((m = r.match(/^Nome:\s*(.*)$/i))) cur.nome = m[1];
     else if ((m = r.match(/^Ritiro:\s*(.*)$/i))) cur.ritiro = m[1];
     else if (/^Totale/i.test(r) || /^Note:/i.test(r)) { /* ignorato */ }
-    else if ((m = r.match(/^-?\s*(\d+)\s*x\s*(.+?)\s*(?:\((kg|etto)\))?$/i))) {
-      cur.righe.push({ qta: parseInt(m[1], 10), nome: m[2].trim() });
+    else if ((m = r.match(/^-?\s*(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s*(?:\((kg|etto)\))?$/i))) {
+      cur.righe.push({ qta: parseFloat(m[1].replace(",", ".")), nome: m[2].trim() });
     }
   });
   return ordini.filter(o => o.righe.length > 0 || o.nome);
@@ -145,7 +146,7 @@ function calcola() {
     `Incassato: ${fmt(incassato)} · da incassare: ${fmt(incasso - incassato)}`,
     ``,
     `Da preparare:`,
-    ...righeProdotti.map(p => `- ${p.qta} ${unita(p.voce)} ${p.voce.nome}: ${fmt(p.importo)}`)
+    ...righeProdotti.map(p => `- ${fmtQ(p.qta)} ${unita(p.voce)} ${p.voce.nome}: ${fmt(p.importo)}`)
   ].join("\n");
 
   $("risultato").innerHTML = `
@@ -165,7 +166,7 @@ function calcola() {
       <table>
         <thead><tr><th>Prodotto</th><th class="num">Quantità</th><th class="num">Importo</th></tr></thead>
         <tbody>
-          ${righeProdotti.map(p => `<tr><td>${esc(p.voce.nome)}</td><td class="num">${p.qta} ${esc(unita(p.voce))}</td><td class="num">${fmt(p.importo)}</td></tr>`).join("")}
+          ${righeProdotti.map(p => `<tr><td>${esc(p.voce.nome)}</td><td class="num">${fmtQ(p.qta)} ${esc(unita(p.voce))}</td><td class="num">${fmt(p.importo)}</td></tr>`).join("")}
         </tbody>
       </table>` : `<p class="vuoto">Nessun ordine riconosciuto.</p>`}
       ${nonRiconosciuti.length ? `<div class="avviso">Non riconosciuti dal menu (controlla il nome):<br>${nonRiconosciuti.map(esc).join("<br>")}</div>` : ""}
@@ -182,7 +183,7 @@ function calcola() {
             <label><input type="checkbox" data-i="${i}" data-k="pagato" ${o.stato.pagato ? "checked" : ""}> Pagato</label>
             <label><input type="checkbox" data-i="${i}" data-k="ritirato" ${o.stato.ritirato ? "checked" : ""}> Ritirato</label>
           </div>
-          <ul>${o.righe.map(r => `<li>${r.qta} x ${esc(r.nome)}</li>`).join("")}</ul>
+          <ul>${o.righe.map(r => `<li>${fmtQ(r.qta)} x ${esc(r.nome)}</li>`).join("")}</ul>
         </div>`).join("")}
     </section>
   `;
