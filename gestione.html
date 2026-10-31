@@ -82,6 +82,14 @@
     </section>
 
     <section>
+      <h2>Aggiungi dal catalogo</h2>
+      <label for="catalogo">Specie</label>
+      <select id="catalogo"></select>
+      <button class="secondario" id="btnCatalogo" style="width:100%;margin-top:10px">Aggiungi specie</button>
+      <p class="piccolo" style="margin-top:8px">La specie viene aggiunta come "non in vendita": imposta il prezzo e spunta "In vendita".</p>
+    </section>
+
+    <section>
       <h2>Aggiungi una voce</h2>
       <label for="nuovaCat">Categoria</label>
       <select id="nuovaCat"></select>
@@ -259,6 +267,15 @@ function mostraEditor() {
             <label class="check"><input type="checkbox" ${v.disponibile ? "checked" : ""} onchange="aggiornaDisponibile(${ci},${vi},this.checked)"> In vendita</label>
           </div>
         </div>
+        <div class="campi" style="grid-template-columns:1fr">
+          <div><label>Stato</label>
+            <select onchange="aggiornaCampo(${ci},${vi},'stato',this.value)">
+              <option value="disponibile" ${!v.stato || v.stato === "disponibile" ? "selected" : ""}>Disponibile</option>
+              <option value="esaurito" ${v.stato === "esaurito" ? "selected" : ""}>Esaurito (visibile al cliente, non ordinabile)</option>
+              <option value="terminato" ${v.stato === "terminato" ? "selected" : ""}>Terminato (nascosto al cliente)</option>
+            </select>
+          </div>
+        </div>
         <div class="piccolo" style="margin-top:10px">Tracciabilità (lascia vuoto ciò che non sai, non viene mostrato)</div>
         <div class="campi">
           ${campoTesto(ci, vi, "nome_scientifico", "Nome scientifico", v)}
@@ -275,6 +292,64 @@ function mostraEditor() {
 
   // categorie per nuova voce
   $("nuovaCat").innerHTML = dati.categorie.map((c, ci) => `<option value="${ci}">${esc(c.nome)}</option>`).join("");
+  $("catalogo").innerHTML = CATALOGO.map((s, i) => `<option value="${i}">${esc(s.nome)} (${esc(s.scientifico)})</option>`).join("");
+}
+
+// Catalogo delle specie più comuni: il nome scientifico è di riferimento, da verificare con il fornitore
+const CATALOGO = [
+  { nome: "Spigola", scientifico: "Dicentrarchus labrax", unita: "kg" },
+  { nome: "Orata", scientifico: "Sparus aurata", unita: "kg" },
+  { nome: "Dentice", scientifico: "Dentex dentex", unita: "kg" },
+  { nome: "Sarago", scientifico: "Diplodus sargus", unita: "kg" },
+  { nome: "Triglia di scoglio", scientifico: "Mullus surmuletus", unita: "kg" },
+  { nome: "Triglia di fango", scientifico: "Mullus barbatus", unita: "kg" },
+  { nome: "Sogliola comune", scientifico: "Solea solea", unita: "kg" },
+  { nome: "Rombo chiodato", scientifico: "Psetta maxima", unita: "kg" },
+  { nome: "Rombo liscio", scientifico: "Scophthalmus rhombus", unita: "kg" },
+  { nome: "Pesce spada", scientifico: "Xiphias gladius", unita: "kg" },
+  { nome: "Tonno rosso", scientifico: "Thunnus thynnus", unita: "kg" },
+  { nome: "Palamita", scientifico: "Sarda sarda", unita: "kg" },
+  { nome: "Ricciola", scientifico: "Seriola dumerili", unita: "kg" },
+  { nome: "Cernia", scientifico: "Epinephelus marginatus", unita: "kg" },
+  { nome: "Cefalo", scientifico: "Mugil cephalus", unita: "kg" },
+  { nome: "Alici", scientifico: "Engraulis encrasicolus", unita: "kg" },
+  { nome: "Sardina", scientifico: "Sardina pilchardus", unita: "kg" },
+  { nome: "Bianchetti", scientifico: "Sardina pilchardus / Engraulis encrasicolus (novellame)", unita: "etto" },
+  { nome: "Gambero rosso di Mazara", scientifico: "Aristaeomorpha foliacea", unita: "kg" },
+  { nome: "Gambero viola", scientifico: "Aristeus antennatus", unita: "kg" },
+  { nome: "Gambero rosa", scientifico: "Parapenaeus longirostris", unita: "kg" },
+  { nome: "Mazzancolla", scientifico: "Melicertus kerathurus", unita: "kg" },
+  { nome: "Scampo", scientifico: "Nephrops norvegicus", unita: "kg" },
+  { nome: "Calamaro", scientifico: "Loligo vulgaris", unita: "kg" },
+  { nome: "Totano", scientifico: "Todarodes sagittatus", unita: "kg" },
+  { nome: "Seppia", scientifico: "Sepia officinalis", unita: "kg" },
+  { nome: "Polpo", scientifico: "Octopus vulgaris", unita: "kg" },
+  { nome: "Cozza", scientifico: "Mytilus galloprovincialis", unita: "kg" },
+  { nome: "Vongola", scientifico: "Ruditapes decussatus", unita: "kg" }
+];
+
+function slugNome(s) {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36).slice(-4);
+}
+
+// Aggiunge una specie dal catalogo nella categoria Pesce fresco, come non in vendita finché non si imposta il prezzo
+function aggiungiDaCatalogo() {
+  const s = CATALOGO[Number($("catalogo").value)];
+  const ci = dati.categorie.findIndex(c => c.id === "pesce-fresco");
+  if (!s || ci < 0) { messaggio("Categoria Pesce fresco non trovata.", "err"); return; }
+  if (dati.categorie[ci].voci.some(v => v.nome.toLowerCase() === s.nome.toLowerCase())) {
+    messaggio(`${s.nome} è già nel menu.`, "info"); return;
+  }
+  leggiTestate();
+  dati.categorie[ci].voci.push({
+    id: slugNome(s.nome), nome: s.nome, descrizione: "", prezzo: 0, unita: s.unita,
+    nome_scientifico: s.scientifico, zona_fao: "", metodo: "", provenienza: "",
+    data_arrivo: "", attrezzo: "", allergeni: "",
+    disponibile: false, stato: "disponibile"
+  });
+  segna();
+  mostraEditor();
+  messaggio(`${s.nome} aggiunto. Imposta il prezzo, spunta "In vendita" e salva.`, "info");
 }
 
 // Campo di testo della tracciabilità: salva direttamente nei dati del menu
@@ -350,6 +425,7 @@ $("btnRicarica").addEventListener("click", () => {
   carica();
 });
 $("btnAggiungi").addEventListener("click", aggiungiVoce);
+$("btnCatalogo").addEventListener("click", aggiungiDaCatalogo);
 window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault(); e.returnValue = ""; } });
 
 // ---- AVVIO ----

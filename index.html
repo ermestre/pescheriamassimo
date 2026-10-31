@@ -54,6 +54,8 @@
   .copia { background:#e8e8e8; color:#222; }
   .chiudi { display:block; margin:12px auto 0; background:none; border:0; color:var(--grigio); font-size:14px; cursor:pointer; }
   .errore { background:#fdecea; color:#8a1c12; padding: 14px; border-radius: 10px; margin-top: 16px; font-size: 14px; }
+  .card.esaurito { opacity: .55; }
+  .tag-esaurito { display:inline-block; background:#b3261e; color:#fff; font-size:11px; padding:2px 7px; border-radius: 999px; vertical-align: middle; margin-left: 6px; }
   .trace { font-size: 12px; color: var(--grigio); margin-top: 6px; line-height: 1.4; }
   .arrivare { display:inline-block; margin-top:10px; background: var(--blu); color:#fff; text-decoration:none; padding: 10px 16px; border-radius: 8px; font-weight:700; font-size: 14px; }
   footer { text-align:center; font-size:12px; color: var(--grigio); padding: 24px 12px; }
@@ -150,12 +152,13 @@ function traccia(v) {
 
 function cardHtml(v) {
   const q = carrello[v.id] ? carrello[v.id].qta : 0;
+  const esaurito = v.stato === "esaurito";
   const unita = v.unita ? ` <small>/ ${v.unita}</small>` : "";
   const foto = v.foto ? `<img src="${v.foto}" alt="${v.nome}" loading="lazy">` : "";
-  return `<div class="card">
+  return `<div class="card${esaurito ? " esaurito" : ""}">
     ${foto}
     <div class="info">
-      <div class="nome">${v.nome}</div>
+      <div class="nome">${v.nome}${esaurito ? ' <span class="tag-esaurito">ESAURITO</span>' : ""}</div>
       <div class="desc">${v.descrizione || ""}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}</div>
       <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
       ${traccia(v)}
@@ -163,7 +166,7 @@ function cardHtml(v) {
     <div class="controlli">
       <button class="btn" onclick="cambia('${v.id}',-1)" ${q === 0 ? "disabled" : ""} aria-label="Togli">−</button>
       <span class="qta">${q}</span>
-      <button class="btn piu" onclick="cambia('${v.id}',1)" aria-label="Aggiungi">+</button>
+      <button class="btn piu" onclick="cambia('${v.id}',1)" ${esaurito ? "disabled" : ""} aria-label="Aggiungi">+</button>
     </div>
   </div>`;
 }
@@ -181,7 +184,7 @@ function render() {
     </div>` : "";
 
   document.getElementById("menu").innerHTML = menu.categorie.map(c =>
-    `<h2>${c.nome}</h2>` + c.voci.filter(v => v.disponibile).map(cardHtml).join("")
+    `<h2>${c.nome}</h2>` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")
   ).join("");
   aggiornaTotali();
 }
