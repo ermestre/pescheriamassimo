@@ -1,7 +1,7 @@
 {
   "locale": "Pescheria da Massimo",
   "valuta": "EUR",
-  "whatsapp": "390000000000",
+  "whatsapp": "393394227405",
   "nota": "PREZZI DI ESEMPIO: da sostituire con quelli reali. Voci marcate (da confermare) vanno verificate sul banco.",
   "foto_insegna": "img/insegna.jpg",
   "categorie": [
@@ -13,7 +13,7 @@
           "id": "insalata-di-mare",
           "nome": "Insalata di mare",
           "descrizione": "Calamari, polpo, sedano, limone, prezzemolo",
-          "prezzo": 12.00,
+          "prezzo": 12,
           "unita": null,
           "foto": "img/insalata-di-mare.jpg",
           "disponibile": true
@@ -22,7 +22,7 @@
           "id": "ragu-di-pesce",
           "nome": "Ragù di pesce",
           "descrizione": "Pasta a tubo (rigatoni, da confermare) con ragù di pesce",
-          "prezzo": 13.00,
+          "prezzo": 13,
           "unita": null,
           "foto": "img/ragu-di-pesce.jpg",
           "disponibile": true
@@ -31,7 +31,7 @@
           "id": "caponata-di-spada",
           "nome": "Caponata di spada",
           "descrizione": "Pesce spada, melanzane, pomodorini, olive nere, basilico",
-          "prezzo": 11.00,
+          "prezzo": 11,
           "unita": null,
           "foto": "img/caponata-di-spada.jpg",
           "disponibile": true
@@ -40,7 +40,7 @@
           "id": "crema-di-scampi",
           "nome": "Crema di scampi",
           "descrizione": "Crema di scampi con pastina (da confermare)",
-          "prezzo": 14.00,
+          "prezzo": 14,
           "unita": null,
           "foto": "img/crema-di-scampi.jpg",
           "disponibile": true
@@ -55,17 +55,17 @@
           "id": "spigola-orata",
           "nome": "Spigola / Orata (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 24.00,
+          "prezzo": 24,
           "unita": "kg",
           "foto": "img/spigola-orata.jpg",
-          "in_evidenza": true,
-          "disponibile": true
+          "disponibile": true,
+          "in_evidenza": true
         },
         {
           "id": "rombo-sogliola",
           "nome": "Rombo / Sogliola (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 28.00,
+          "prezzo": 28,
           "unita": "kg",
           "foto": "img/rombo-sogliola.jpg",
           "disponibile": true
@@ -74,7 +74,7 @@
           "id": "gamberi-rossi",
           "nome": "Gamberi rossi (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 45.00,
+          "prezzo": 45,
           "unita": "kg",
           "foto": "img/gamberi-rossi.jpg",
           "disponibile": true
@@ -83,7 +83,7 @@
           "id": "gamberetti-sgusciati",
           "nome": "Gamberetti sgusciati",
           "descrizione": "Pronti da cucinare",
-          "prezzo": 2.50,
+          "prezzo": 2.5,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
@@ -92,7 +92,7 @@
           "id": "trancio-tonno",
           "nome": "Trancio di tonno (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 35.00,
+          "prezzo": 35,
           "unita": "kg",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
@@ -101,7 +101,7 @@
           "id": "bianchetti",
           "nome": "Bianchetti (novellame)",
           "descrizione": "Pronti da cucinare",
-          "prezzo": 3.50,
+          "prezzo": 3.5,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
@@ -116,7 +116,7 @@
           "id": "frittura-di-pesce",
           "nome": "Frittura di pesce",
           "descrizione": "Frittura mista preparata da Massimo ogni giorno",
-          "prezzo": 14.00,
+          "prezzo": 14,
           "unita": null,
           "su_ordinazione": true,
           "ordini_entro": "16:00 del giorno stesso",
@@ -128,7 +128,12 @@
   "ritiro": {
     "attivo": true,
     "ordini_entro": "18:00 del giorno prima",
-    "orari_sera": ["18:30", "19:00", "19:30", "20:00"],
+    "orari_sera": [
+      "18:30",
+      "19:00",
+      "19:30",
+      "20:00"
+    ],
     "finestre_ritiro": [],
     "chiusure": [],
     "nota": "Da compilare per il periodo natalizio: giorni e orari di ritiro"
