@@ -210,8 +210,8 @@
       "id": "natale",
       "nome": "Specialità di Natale",
       "periodo": {
-        "dal": "2026-10-31",
-        "al": "2026-11-01"
+        "dal": "",
+        "al": ""
       },
       "ordini_entro": "",
       "voci": []
