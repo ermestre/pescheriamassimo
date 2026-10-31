@@ -214,17 +214,7 @@
         "al": "2026-11-01"
       },
       "ordini_entro": "",
-      "voci": [
-        {
-          "id": "pesce-spada-wn2p",
-          "nome": "pesce spada",
-          "descrizione": "",
-          "prezzo": 34,
-          "unita": "kg",
-          "disponibile": true,
-          "stato": "disponibile"
-        }
-      ]
+      "voci": []
     }
   ],
   "ritiro": {
