@@ -196,7 +196,26 @@
         "al": ""
       },
       "ordini_entro": "",
-      "voci": []
+      "voci": [
+        {
+          "id": "baccala-w2mu",
+          "nome": "baccala",
+          "descrizione": "",
+          "prezzo": 6,
+          "unita": "kg",
+          "disponibile": true,
+          "stato": "disponibile"
+        },
+        {
+          "id": "pesce-spada-wn2p",
+          "nome": "pesce spada",
+          "descrizione": "",
+          "prezzo": 34,
+          "unita": "kg",
+          "disponibile": true,
+          "stato": "disponibile"
+        }
+      ]
     }
   ],
   "ritiro": {
