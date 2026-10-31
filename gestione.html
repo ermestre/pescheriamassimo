@@ -257,12 +257,30 @@ function mostraEditor() {
             <label class="check"><input type="checkbox" ${v.disponibile ? "checked" : ""} onchange="aggiornaDisponibile(${ci},${vi},this.checked)"> In vendita</label>
           </div>
         </div>
+        <div class="piccolo" style="margin-top:10px">Tracciabilità (lascia vuoto ciò che non sai, non viene mostrato)</div>
+        <div class="campi">
+          ${campoTesto(ci, vi, "nome_scientifico", "Nome scientifico", v)}
+          ${campoTesto(ci, vi, "zona_fao", "Zona FAO / paese", v)}
+          ${campoTesto(ci, vi, "metodo", "Metodo (pescato, allevato...)", v)}
+          ${campoTesto(ci, vi, "provenienza", "Provenienza / mercato", v)}
+          ${campoTesto(ci, vi, "data_arrivo", "Data di arrivo", v)}
+          ${campoTesto(ci, vi, "attrezzo", "Attrezzo di pesca", v)}
+          ${campoTesto(ci, vi, "allergeni", "Allergeni", v)}
+        </div>
         <button class="elimina" onclick="eliminaVoce(${ci},${vi})">Elimina voce</button>
       </div>`).join("")}
   `).join("");
 
   // categorie per nuova voce
   $("nuovaCat").innerHTML = dati.categorie.map((c, ci) => `<option value="${ci}">${esc(c.nome)}</option>`).join("");
+}
+
+// Campo di testo della tracciabilità: salva direttamente nei dati del menu
+function campoTesto(ci, vi, k, etichetta, v) {
+  return `<div><label>${etichetta}</label><input type="text" value="${esc(v[k] || "")}" onchange="aggiornaCampo(${ci},${vi},'${k}',this.value)"></div>`;
+}
+function aggiornaCampo(ci, vi, k, val) {
+  dati.categorie[ci].voci[vi][k] = val.trim(); segna();
 }
 
 function aggiornaPrezzo(ci, vi, val) {

@@ -54,6 +54,7 @@
   .copia { background:#e8e8e8; color:#222; }
   .chiudi { display:block; margin:12px auto 0; background:none; border:0; color:var(--grigio); font-size:14px; cursor:pointer; }
   .errore { background:#fdecea; color:#8a1c12; padding: 14px; border-radius: 10px; margin-top: 16px; font-size: 14px; }
+  .trace { font-size: 12px; color: var(--grigio); margin-top: 6px; line-height: 1.4; }
   .arrivare { display:inline-block; margin-top:10px; background: var(--blu); color:#fff; text-decoration:none; padding: 10px 16px; border-radius: 8px; font-weight:700; font-size: 14px; }
   footer { text-align:center; font-size:12px; color: var(--grigio); padding: 24px 12px; }
 </style>
@@ -133,6 +134,20 @@ const carrello = {}; // id -> { voce, qta }
 const fmt = n => n.toFixed(2).replace(".", ",") + " €";
 const tutte = () => menu.categorie.flatMap(c => c.voci);
 
+const escapa = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+// Riga di tracciabilità: compare solo per i campi compilati
+function traccia(v) {
+  const p = [];
+  if (v.nome_scientifico) p.push(`<i>${escapa(v.nome_scientifico)}</i>`);
+  if (v.zona_fao) p.push(`Zona FAO ${escapa(v.zona_fao)}`);
+  if (v.metodo) p.push(escapa(v.metodo));
+  if (v.provenienza) p.push(`Provenienza: ${escapa(v.provenienza)}`);
+  if (v.data_arrivo) p.push(`Arrivato il ${escapa(v.data_arrivo)}`);
+  if (v.attrezzo) p.push(`Attrezzo: ${escapa(v.attrezzo)}`);
+  if (v.allergeni) p.push(`Allergeni: ${escapa(v.allergeni)}`);
+  return p.length ? `<div class="trace">${p.join(" · ")}</div>` : "";
+}
+
 function cardHtml(v) {
   const q = carrello[v.id] ? carrello[v.id].qta : 0;
   const unita = v.unita ? ` <small>/ ${v.unita}</small>` : "";
@@ -143,6 +158,7 @@ function cardHtml(v) {
       <div class="nome">${v.nome}</div>
       <div class="desc">${v.descrizione || ""}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}</div>
       <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
+      ${traccia(v)}
     </div>
     <div class="controlli">
       <button class="btn" onclick="cambia('${v.id}',-1)" ${q === 0 ? "disabled" : ""} aria-label="Togli">−</button>
