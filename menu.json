@@ -86,7 +86,8 @@
           "prezzo": 28,
           "unita": "kg",
           "foto": "img/rombo-sogliola.jpg",
-          "disponibile": true
+          "disponibile": true,
+          "in_evidenza": true
         },
         {
           "id": "gamberi-rossi",
@@ -166,8 +167,7 @@
           "attrezzo": "",
           "allergeni": "",
           "disponibile": false,
-          "stato": "disponibile",
-          "in_evidenza": true
+          "stato": "disponibile"
         }
       ]
     },
