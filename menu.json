@@ -210,8 +210,8 @@
       "id": "natale",
       "nome": "Specialità di Natale",
       "periodo": {
-        "dal": "",
-        "al": ""
+        "dal": "2026-10-31",
+        "al": "2026-11-01"
       },
       "ordini_entro": "",
       "voci": [
@@ -222,7 +222,12 @@
           "prezzo": 6,
           "unita": "kg",
           "disponibile": true,
-          "stato": "disponibile"
+          "stato": "disponibile",
+          "nome_scientifico": "baccalus",
+          "zona_fao": "45",
+          "metodo": "a mano",
+          "attrezzo": "rete",
+          "consiglio": "farlo a bagno maria o fritto com pomodoro"
         },
         {
           "id": "pesce-spada-wn2p",
