@@ -180,7 +180,16 @@
         "al": ""
       },
       "ordini_entro": "",
-      "voci": []
+      "voci": [
+        {
+          "id": "polpo-alla-massimo-kb8o",
+          "nome": "polpo alla massimo",
+          "descrizione": "fatto con ricetta di lampedusa",
+          "prezzo": 22,
+          "unita": null,
+          "disponibile": true
+        }
+      ]
     }
   ],
   "ritiro": {
