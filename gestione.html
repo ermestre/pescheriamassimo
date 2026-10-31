@@ -238,7 +238,9 @@ function mostraEditor() {
     <h3>${esc(c.nome)}</h3>
     ${c.voci.map((v, vi) => `
       <div class="voce">
-        <div class="nome-voce">${esc(v.nome)}</div>
+        <div class="campi" style="grid-template-columns:1fr">
+          ${campoTesto(ci, vi, "nome", "Nome del prodotto (togli \"da confermare\" quando è sicuro)", v)}
+        </div>
         <div class="desc">${esc(v.descrizione || "")}</div>
         <div class="campi">
           <div>
