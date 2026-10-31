@@ -15,7 +15,7 @@
           "allergeni": "",
           "nome": "Insalata di mare",
           "descrizione": "Calamari, polpo, sedano, limone, prezzemolo",
-          "prezzo": 12.00,
+          "prezzo": 12,
           "unita": null,
           "foto": "img/insalata-di-mare.jpg",
           "disponibile": true
@@ -25,7 +25,7 @@
           "allergeni": "",
           "nome": "Ragù di pesce",
           "descrizione": "Pasta a tubo (rigatoni, da confermare) con ragù di pesce",
-          "prezzo": 13.00,
+          "prezzo": 13,
           "unita": null,
           "foto": "img/ragu-di-pesce.jpg",
           "disponibile": true
@@ -35,7 +35,7 @@
           "allergeni": "",
           "nome": "Caponata di spada",
           "descrizione": "Pesce spada, melanzane, pomodorini, olive nere, basilico",
-          "prezzo": 11.00,
+          "prezzo": 11,
           "unita": null,
           "foto": "img/caponata-di-spada.jpg",
           "disponibile": true
@@ -45,7 +45,7 @@
           "allergeni": "",
           "nome": "Crema di scampi",
           "descrizione": "Crema di scampi con pastina (da confermare)",
-          "prezzo": 14.00,
+          "prezzo": 14,
           "unita": null,
           "foto": "img/crema-di-scampi.jpg",
           "disponibile": true
@@ -65,12 +65,11 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Spigola / Orata (da confermare)",
+          "nome": "Spigola / Orata",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 24.00,
+          "prezzo": 24,
           "unita": "kg",
           "foto": "img/spigola-orata.jpg",
-          "in_evidenza": true,
           "disponibile": true
         },
         {
@@ -82,9 +81,9 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Rombo / Sogliola (da confermare)",
+          "nome": "Rombo / Sogliola",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 28.00,
+          "prezzo": 28,
           "unita": "kg",
           "foto": "img/rombo-sogliola.jpg",
           "disponibile": true
@@ -98,9 +97,9 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Gamberi rossi (da confermare)",
+          "nome": "Gamberi rossi",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 45.00,
+          "prezzo": 45,
           "unita": "kg",
           "foto": "img/gamberi-rossi.jpg",
           "disponibile": true
@@ -116,7 +115,7 @@
           "allergeni": "",
           "nome": "Gamberetti sgusciati",
           "descrizione": "Pronti da cucinare",
-          "prezzo": 2.50,
+          "prezzo": 2.5,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
@@ -132,7 +131,7 @@
           "allergeni": "",
           "nome": "Trancio di tonno (da confermare)",
           "descrizione": "Pesce fresco del giorno",
-          "prezzo": 35.00,
+          "prezzo": 35,
           "unita": "kg",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
@@ -148,10 +147,27 @@
           "allergeni": "",
           "nome": "Bianchetti (novellame)",
           "descrizione": "Pronti da cucinare",
-          "prezzo": 3.50,
+          "prezzo": 3.5,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
           "disponibile": true
+        },
+        {
+          "id": "spigola-s738",
+          "nome": "Spigola",
+          "descrizione": "",
+          "prezzo": 0,
+          "unita": "kg",
+          "nome_scientifico": "Dicentrarchus labrax",
+          "zona_fao": "",
+          "metodo": "",
+          "provenienza": "",
+          "data_arrivo": "",
+          "attrezzo": "",
+          "allergeni": "",
+          "disponibile": false,
+          "stato": "disponibile",
+          "in_evidenza": true
         }
       ]
     },
@@ -164,7 +180,7 @@
           "allergeni": "",
           "nome": "Frittura di pesce",
           "descrizione": "Frittura mista preparata da Massimo ogni giorno",
-          "prezzo": 14.00,
+          "prezzo": 14,
           "unita": null,
           "su_ordinazione": true,
           "ordini_entro": "16:00 del giorno stesso",
@@ -176,7 +192,12 @@
   "ritiro": {
     "attivo": true,
     "ordini_entro": "18:00 del giorno prima",
-    "orari_sera": ["18:30", "19:00", "19:30", "20:00"],
+    "orari_sera": [
+      "18:30",
+      "19:00",
+      "19:30",
+      "20:00"
+    ],
     "finestre_ritiro": [],
     "chiusure": [],
     "nota": "Da compilare per il periodo natalizio: giorni e orari di ritiro"
