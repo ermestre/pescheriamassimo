@@ -145,9 +145,16 @@ export default {
   try{
    if(url.pathname==="/api/orders" && request.method==="GET"){
     const date=url.searchParams.get("date");
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(date||"")) return json({errore:"Data non valida"},400);
-    const result=await env.db.prepare("SELECT * FROM orders WHERE pickup_date = ? ORDER BY pickup_time, created_at LIMIT 501").bind(date).all();
-    if(result.results.length>500) return json({errore:"Troppi ordini per questa vista. Occorre aggiungere la paginazione."},409);
+    if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date+"T12:00:00Z")) || new Date(date+"T12:00:00Z").toISOString().slice(0,10)!==date)) return json({errore:"Data non valida"},400);
+    const view=url.searchParams.get("view")||"all";
+    if(!["all","open"].includes(view))return json({errore:"Vista non valida"},400);
+    const conditions=[],params=[];
+    if(date){conditions.push("pickup_date = ?");params.push(date);}
+    if(view==="open")conditions.push("status IN ('new','confirmed','ready')");
+    let statement=env.db.prepare("SELECT * FROM orders"+(conditions.length?" WHERE "+conditions.join(" AND "):"")+" ORDER BY pickup_date, pickup_time, created_at, id LIMIT 501");
+    if(params.length)statement=statement.bind(...params);
+    const result=await statement.all();
+    if(result.results.length>500) return json({errore:"Ci sono più di 500 ordini. Seleziona una data di ritiro per restringere la vista."},409);
     return json({orders:result.results.map(row=>({...row,items:JSON.parse(row.items_json),items_json:undefined}))});
    }
    const match=url.pathname.match(/^\/api\/orders\/([a-zA-Z0-9-]{1,80})$/);
@@ -178,15 +185,16 @@ const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="v
 <style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
 <h1>Ordini · Pescheria Massimo</h1>
 <form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><button>Accedi</button><p>La chiave resta in memoria fino alla chiusura o all’aggiornamento della pagina.</p></form>
-<section id="panel" hidden><div class="bar"><label>Data ritiro <input id="day" type="date"></label><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><p id="totals"></p><div id="orders"></div></section>
+<section id="panel" hidden><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><p id="scope"></p><p id="totals"></p><div id="orders"></div></section>
 <p id="msg" role="status" aria-live="polite"></p>
 <script>
-let token="";
+let token="",loadSeq=0;
 const $=id=>document.getElementById(id);
 $("showKey").onchange=()=>{$("key").type=$("showKey").checked?"text":"password";};
 const money=n=>new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n/100);
 const states={new:"Nuovo",confirmed:"Confermato",ready:"Pronto",collected:"Ritirato",cancelled:"Annullato"};
-$("day").value=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Rome"}).format(new Date());
+$("day").value="";
+const formatDate=date=>new Date(date+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});
 function element(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
 async function api(path,options={}){
  const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},cache:"no-store"});
@@ -194,17 +202,23 @@ async function api(path,options={}){
  if(!response.ok){if(response.status===401)exit();throw new Error(data.errore||"Operazione non riuscita");}
  return data;
 }
-function exit(){token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;}
+function exit(){loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;}
 async function load(){
+ const seq=++loadSeq;
+ $("orders").replaceChildren();$("totals").textContent="";$("scope").textContent="";
  $("msg").textContent="Caricamento…";
  try{
- const data=await api("/api/orders?date="+encodeURIComponent($("day").value));
+ const query=new URLSearchParams({view:$("view").value});
+ if($("day").value)query.set("date",$("day").value);
+ const data=await api("/api/orders?"+query);
+ if(seq!==loadSeq || !token)return;
+ $("scope").textContent=($("view").value==="open"?"Ordini da gestire: nuovi, confermati e pronti":"Archivio: tutti gli stati")+($("day").value?" · Ritiro "+formatDate($("day").value):" · Tutte le date di ritiro");
  $("login").hidden=true;$("panel").hidden=false;$("orders").replaceChildren();
  const active=data.orders.filter(o=>o.status!=="cancelled");
  $("totals").textContent=active.length+" ordini · Incassato "+money(active.filter(o=>o.paid).reduce((s,o)=>s+o.total_cents,0))+" · Da incassare "+money(active.filter(o=>!o.paid).reduce((s,o)=>s+o.total_cents,0));
  for(const o of data.orders){
   const card=element("article","");
-  card.append(element("h2",o.customer_name+" · "+money(o.total_cents)),element("small","Codice: "+o.id),element("p","Ritiro: "+o.pickup_date+" alle "+o.pickup_time),element("p","Cellulare: "+o.customer_phone));
+  card.append(element("h2",o.customer_name+" · "+money(o.total_cents)),element("small","Codice: "+o.id),element("p","Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time),element("p","Cellulare: "+o.customer_phone));
   if(o.notes)card.append(element("p","Note: "+o.notes));
   const list=element("ul","");
   for(const item of o.items)list.append(element("li",(item.quantity??item.qta??"")+" "+(item.unit??item.unita??"")+" · "+(item.name??item.nome??item.id??"Prodotto")));
@@ -217,9 +231,9 @@ async function load(){
   paid.onchange=()=>change({paid:paid.checked});select.onchange=()=>change({status:select.value});
   $("orders").append(card);
  }
- $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":"Nessun ordine per questa data.";
- }catch(e){$("msg").textContent=e.message;}
+ $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":($("view").value==="open"?"Nessun ordine da gestire":"Nessun ordine in archivio")+($("day").value?" per questa data.":".");
+ }catch(e){if(seq===loadSeq)$("msg").textContent=e.message;}
 }
-$("login").onsubmit=e=>{e.preventDefault();token=$("key").value;$("key").value="";load();};
-$("refresh").onclick=load;$("day").onchange=load;$("logout").onclick=()=>{exit();$("msg").textContent="Accesso chiuso";};
+$("login").onsubmit=e=>{e.preventDefault();token=$("key").value;$("key").value="";$("view").value="open";$("day").value="";load();};
+$("refresh").onclick=load;$("day").onchange=load;$("view").onchange=load;$("clearDay").onclick=()=>{$("day").value="";load();};$("logout").onclick=()=>{exit();$("msg").textContent="Accesso chiuso";};
 </script></html>`;
