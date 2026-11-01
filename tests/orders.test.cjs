@@ -38,3 +38,18 @@ assert.ok(admin.node('risultato').innerHTML.includes('stimati'),'stima legacy se
 admin.run(`let migrati=leggiOrdini(${JSON.stringify(old)});ripristinaStati(migrati,{testo:${JSON.stringify(old)},stato:{0:{pagato:true}}},'')`);
 assert.equal(admin.run('migrati[0].stato.pagato'),true,'migrazione vecchie spunte');
 console.log('OK: esauriti, ordine completo, prezzi storici, stato stabile e migrazione.');
+
+const duplicate=admin.run(`controllaDuplicati(leggiOrdini(${JSON.stringify(message+'\n'+message)}))`);
+assert.equal(duplicate.ordini.length,1);assert.equal(duplicate.duplicati,1);
+admin.node('testo').value=message+'\n'+message;admin.run('calcola()');
+assert.ok(admin.node('stato').textContent.includes('duplicate ignorate'));
+const another=message.replace(parsed.codice,'secondo-codice');
+admin.node('testo').value=message+'\n'+another;admin.run('calcola()');
+assert.ok(admin.node('risultato').innerHTML.includes('<b>2</b>'),'stesso cliente, codici distinti');
+const conflict=message.replace('Nome: Mario','Nome: Anna');
+admin.node('testo').value=message+'\n'+conflict;admin.run('calcola()');
+assert.ok(admin.node('stato').textContent.includes('dati diversi'));
+assert.equal(admin.node('risultato').innerHTML,'');
+assert.equal(admin.run(`controllaDuplicati(leggiOrdini(${JSON.stringify(old+'\n'+old)})).ordini.length`),2,'vecchi ordini uguali non eliminati senza certezza');
+assert.equal(admin.run(`controllaDuplicati(leggiOrdini(${JSON.stringify(old+'\n'+old)})).simili`),1);
+console.log('OK: duplicati, codici distinti, conflitti e ordini senza codice.');

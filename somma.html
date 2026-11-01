@@ -51,7 +51,8 @@
   <section>
     <h2>Ordini della serata</h2>
     <p class="aiuto">Copia dal telefono i messaggi degli ordini e incollali qui sotto, uno dopo l'altro. Il testo e le spunte "Pagato" e "Ritirato" restano salvati solo su questo telefono, per la serata di oggi.</p>
-    <textarea id="testo" placeholder="Incolla qui gli ordini..."></textarea>
+    <p>Aggiungi ogni nuovo messaggio in fondo al testo, senza cancellare quelli precedenti. Le copie con lo stesso codice vengono contate una sola volta.</p>
+  <textarea id="testo" placeholder="Incolla qui gli ordini..."></textarea>
     <div class="bottoni">
       <button class="secondario" id="pulisci">Svuota</button>
       <button class="principale" id="calcola">Calcola</button>
@@ -119,6 +120,34 @@ function leggiOrdini(testo) {
   return ordini.filter(o => o.righe.length > 0 || o.nome);
 }
 
+// Un codice identifica un ordine, non una persona: acquisti distinti restano separati.
+function controllaDuplicati(ordini) {
+  const codici = new Map();
+  const senzaCodice = new Set();
+  const unici = [];
+  let duplicati = 0;
+  let simili = 0;
+  for (const o of ordini) {
+    const firma = JSON.stringify([o.nome, o.cellulare, o.ritiro, o.note, o.totaleRicevuto, o.righe]);
+    if (o.codice) {
+      if (codici.has(o.codice)) {
+        if (codici.get(o.codice) !== firma) {
+          return { errore: `Il codice ${o.codice} compare con dati diversi. Controlla i messaggi prima di calcolare.`, ordini: [], duplicati, simili };
+        }
+        duplicati++;
+        continue;
+      }
+      codici.set(o.codice, firma);
+    } else {
+      // Senza identificativo non possiamo distinguere una copia da due acquisti uguali.
+      if (senzaCodice.has(firma)) simili++;
+      senzaCodice.add(firma);
+    }
+    unici.push(o);
+  }
+  return { ordini: unici, duplicati, simili, errore: "" };
+}
+
 // Le chiavi complete evitano collisioni e non dipendono dalla posizione nel testo.
 function chiaviOrdini(ordini) {
   const occorrenze = new Map();
@@ -145,7 +174,22 @@ function calcola() {
   if (!testo.trim()) { $("stato").textContent = "Incolla prima gli ordini."; return; }
   $("stato").textContent = "";
 
-  const ordini = leggiOrdini(testo);
+  const controllo = controllaDuplicati(leggiOrdini(testo));
+  if (controllo.errore) {
+    $("stato").textContent = controllo.errore;
+    $("risultato").innerHTML = "";
+    return;
+  }
+  const ordini = controllo.ordini;
+  if (!ordini.length) {
+    $("stato").textContent = "Nessun ordine riconosciuto. Incolla il messaggio completo del cliente.";
+    $("risultato").innerHTML = "";
+    return;
+  }
+  $("stato").textContent = [
+    controllo.duplicati ? `${controllo.duplicati} copie duplicate ignorate: ogni codice ordine è contato una sola volta.` : "",
+    controllo.simili ? "Attenzione: messaggi uguali senza codice ordine. Sono contati separatamente: verifica che non siano copie." : ""
+  ].filter(Boolean).join(" ");
   const salvati = caricaStato();
   ripristinaStati(ordini, salvati, testo);
   salvaStato(testo, ordini);
@@ -219,6 +263,7 @@ function calcola() {
       ${ordini.map((o, i) => `
         <div class="ordine">
           <div class="testa"><span>${esc(o.nome || "Senza nome")}</span><span>${fmt(o.totale)}</span></div>
+          ${o.codice ? `<div class="piccolo">Codice ordine: ${esc(o.codice)}</div>` : ""}
           <div>Ritiro: ${esc(o.ritiro || "non indicato")}</div>
           ${o.cellulare ? `<div>Cellulare: ${esc(o.cellulare)}</div>` : ""}
           ${o.note ? `<div style="white-space:pre-wrap"><b>Note:</b> ${esc(o.note)}</div>` : ""}
