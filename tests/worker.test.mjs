@@ -35,6 +35,21 @@ assert.throws(()=>priceOrder(basicOrder({...input,items:[{id:'spigola-orata',qua
 assert.throws(()=>priceOrder(basicOrder({...input,pickup_date:'2026-01-01'}),menu));
 menu.categorie[1].voci[0].stato='esaurito';
 assert.throws(()=>priceOrder(basicOrder(input),menu));
+// Open inbox across dates, optional day filter and terminal-state archive.
+const insert=sqlite.prepare("INSERT INTO orders(id,customer_name,customer_phone,pickup_date,pickup_time,notes,items_json,total_cents,status) VALUES (?, 'Inbox test', '3331234567', ?, '09:00', '', '[]', 100, ?)");
+for(const [id,date,status] of [['earlier','2025-01-01','new'],['later','2028-01-01','confirmed'],['ready','2028-01-02','ready'],['collected','2028-01-01','collected'],['cancelled','2028-01-01','cancelled']])insert.run(id,date,status);
+const inbox=async path=>{const result=await worker.fetch(request(path,null,{headers}),env);assert.equal(result.status,200);return (await result.json()).orders;};
+const open=await inbox('/api/orders?view=open');assert.equal(open.length,4);assert.equal(open[0].id,'earlier');assert.equal(open.at(-1).id,'ready');
+assert.equal((await inbox('/api/orders?view=all')).length,6);
+assert.deepEqual((await inbox('/api/orders?view=open&date=2028-01-01')).map(o=>o.id),['later']);
+assert.equal((await inbox('/api/orders?view=all&date=2028-01-01')).length,3);
+assert.equal((await worker.fetch(request('/api/orders?date=2026-02-31',null,{headers}),env)).status,400);
+assert.equal((await worker.fetch(request('/api/orders?view=invalid',null,{headers}),env)).status,400);
+assert.equal((await worker.fetch(request('/api/orders?view=open'),env)).status,401);
+assert.equal((await worker.fetch(request('/api/orders/later',{status:'collected'},{method:'PATCH',headers}),env)).status,200);
+assert.equal((await inbox('/api/orders?view=open&date=2028-01-01')).length,0);
+sqlite.exec("DELETE FROM orders WHERE id IN ('earlier','later','ready','collected','cancelled')");
+
 // Atomic rate limit eventually refuses repeated attempts; no extra orders created.
 let limited=false;for(let i=0;i<12;i++){r=await worker.fetch(request('/api/submit',input),env);if(r.status===429)limited=true;}assert.equal(limited,true);
 assert.equal(sqlite.prepare('SELECT count(*) n FROM orders').get().n,1);
