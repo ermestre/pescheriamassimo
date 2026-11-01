@@ -153,15 +153,15 @@
         {
           "id": "sogliola",
           "nome_scientifico": "",
-          "zona_fao": "",
-          "metodo": "",
+          "zona_fao": "37 - Mediterraneo",
+          "metodo": "pescato",
           "provenienza": "",
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
           "nome": "Sogliola",
           "descrizione": "Prezzo di esempio, da verificare con la pescheria.",
-          "prezzo": 28,
+          "prezzo": 25,
           "unita": "kg",
           "foto": "img/rombo-sogliola.jpg",
           "disponibile": true,
@@ -170,7 +170,10 @@
             "Pulito",
             "Sfilettato"
           ],
-          "foto_didascalia": "Immagine indicativa"
+          "foto_didascalia": "Immagine indicativa",
+          "stato_prodotto": "Fresco",
+          "paese_origine": "mare mediterraneo",
+          "consiglio": "in padella con pomodori"
         },
         {
           "id": "gamberi-rossi",
