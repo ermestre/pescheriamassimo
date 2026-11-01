@@ -19,6 +19,12 @@ assert.match(client.run('scelteVoce({id:"x",prezzo:1,disponibile:true,consiglio:
 const editor=load('gestione.html');editor.run('dati='+JSON.stringify(menu));
 const index=fish.findIndex(v=>v.id==='orata'),ci=menu.categorie.findIndex(c=>c.id==='pesce-fresco');
 editor.run(`aggiornaPreparazioni(${ci},${index},'Pulito',true);aggiornaPreparazioni(${ci},${index},'A filetti',true);aggiornaPreparazioni(${ci},${index},'Intero',false)`);
-assert.equal(editor.run(`dati.categorie[${ci}].voci[${index}].preparazioni.join(',')`),'Pulito,A filetti');
+assert.equal(editor.run(`dati.categorie[${ci}].voci[${index}].preparazioni.join(',')`),'Pulito,Sfilettato,A filetti');
 assert.match(editor.run(`voceHtml(${ci},${index},dati.categorie[${ci}].voci[${index}])`),/stato_prodotto/);
 console.log('OK: prodotti separati, quantità, prezzi, preparazioni, esauriti e gestione.');
+
+const customerSource=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const managementSource=fs.readFileSync(path.join(root,'gestione.html'),'utf8');
+assert.ok(customerSource.includes('API_ORDINI') && customerSource.includes('/api/submit'),'Il checkout deve inviare all’archivio centrale');
+assert.ok(managementSource.includes('notaMenu') && managementSource.includes('qr-menu.svg'),'Avviso e QR devono restare nella gestione');
+for(const choice of ['Intero','Pulito','Sfilettato']){client.run('tutte().find(v=>v.id==="orata").stato="disponibile";scegliPreparazione("orata",'+JSON.stringify(choice)+')');assert.match(client.run('testoOrdine()'),new RegExp('Orata \\['+choice+'\\]'));}
