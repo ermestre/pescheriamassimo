@@ -239,7 +239,7 @@ const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="v
 <style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
 <h1>Ordini · Pescheria Massimo</h1>
 <form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><button>Accedi</button><p>La chiave resta in memoria fino alla chiusura o all’aggiornamento della pagina.</p></form>
-<section id="panel" hidden><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details><div id="orders"></div></section>
+<section id="panel" hidden><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><details><summary>Suono personalizzato</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details><div id="orders"></div></section>
 <p id="msg" role="status" aria-live="polite"></p>
 <script>
 let token="",loadSeq=0,alertAudio=null,alertsEnabled=false,polling=false,mutations=0;
@@ -366,24 +366,97 @@ function newOrderIds(orders){
  if(!ordersBaseline){ordersBaseline=true;return [];}
  return fresh;
 }
+
+let customBuffer=null,savedSound=null;
+function alertStore(action,value){
+ return new Promise((resolve,reject)=>{
+  let db,settled=false;
+  const finish=(err,result)=>{if(settled)return;settled=true;clearTimeout(timer);if(db)db.close();err?reject(err):resolve(result);};
+  const timer=setTimeout(()=>finish(new Error("Archivio audio non disponibile")),5000);
+  let open;try{open=indexedDB.open("pm-order-alerts",1);}catch(e){finish(e);return;}
+  open.onupgradeneeded=()=>{if(!open.result.objectStoreNames.contains("sounds"))open.result.createObjectStore("sounds");};
+  open.onerror=()=>finish(open.error);open.onblocked=()=>finish(new Error("Archivio audio bloccato"));
+  open.onsuccess=()=>{
+   db=open.result;if(settled){db.close();return;}
+   try{
+    const tx=db.transaction("sounds",action==="get"?"readonly":"readwrite"),store=tx.objectStore("sounds");
+    const req=action==="get"?store.get("order"):action==="put"?store.put(value,"order"):store.delete("order");
+    let result;req.onsuccess=()=>{result=req.result;};
+    tx.oncomplete=()=>finish(null,result);tx.onerror=()=>finish(tx.error||new Error("Errore archivio audio"));tx.onabort=()=>finish(tx.error||new Error("Archivio audio annullato"));
+   }catch(e){finish(e);}
+  };
+ });
+}
+const savedSoundReady=alertStore("get").then(value=>{
+ if(value&&value.bytes instanceof ArrayBuffer&&value.bytes.byteLength<=5*1024*1024){savedSound=value;$("soundName").textContent="MP3 salvato: "+value.name;}
+}).catch(()=>{$("soundName").textContent="Doppio bip. Salvataggio audio non disponibile in questo browser.";});
+async function enableAudio(){
+ const Audio=window.AudioContext||window.webkitAudioContext;
+ if(!Audio)throw new Error("Suono non disponibile");
+ if(!alertAudio)alertAudio=new Audio();
+ await alertAudio.resume();
+}
+$("alertFile").onchange=async()=>{
+ const file=$("alertFile").files[0];if(!file)return;
+ if(!/\\.mp3$/i.test(file.name)||file.size<1||file.size>5*1024*1024){$("soundName").textContent="Scegli un file MP3 valido, massimo 5 MB.";$("alertFile").value="";return;}
+ $("alertFile").disabled=$("resetSound").disabled=true;
+ try{
+  await enableAudio();await savedSoundReady;
+  const bytes=await file.arrayBuffer(),decoded=await alertAudio.decodeAudioData(bytes.slice(0));
+  if(!Number.isFinite(decoded.duration)||decoded.duration<=0)throw new Error("Audio vuoto");
+  const record={name:file.name,bytes};let persisted=true;
+  try{await alertStore("put",record);}catch(e){persisted=false;}
+  savedSound=record;customBuffer=decoded;alertsEnabled=true;
+  $("soundName").textContent=(persisted?"MP3 salvato: ":"MP3 attivo solo per questa apertura: ")+file.name;
+  $("enableAlerts").textContent="Prova suono";
+  $("alertStatus").textContent="Avvisi attivi con MP3. Lascia il pannello aperto; controllo ogni 30 secondi.";
+  soundAlert();
+ }catch(e){$("soundName").textContent="MP3 non caricato. Il suono precedente resta disponibile. Prova un altro file.";}
+ finally{$("alertFile").disabled=$("resetSound").disabled=false;$("alertFile").value="";}
+};
+$("resetSound").onclick=async()=>{
+ $("alertFile").disabled=$("resetSound").disabled=true;
+ try{
+  await savedSoundReady;
+  await alertStore("delete");savedSound=null;customBuffer=null;
+  $("soundName").textContent="Suono: doppio bip.";
+  $("alertStatus").textContent="Doppio bip selezionato. Premi Attiva avvisi o Prova suono.";
+ }catch(e){$("soundName").textContent="Impossibile rimuovere il file salvato. Riprova.";}
+ finally{$("alertFile").disabled=$("resetSound").disabled=false;}
+};
+
 function soundAlert(){
  if(!alertsEnabled||!alertAudio)return;
  try{
   alertAudio.resume().then(()=>{
-   const oscillator=alertAudio.createOscillator(),gain=alertAudio.createGain();
-   oscillator.connect(gain);gain.connect(alertAudio.destination);
-   oscillator.frequency.value=880;gain.gain.value=0.15;
-   oscillator.start();oscillator.stop(alertAudio.currentTime+0.4);
+   if(customBuffer){
+    const source=alertAudio.createBufferSource();source.buffer=customBuffer;source.connect(alertAudio.destination);
+    source.start(0,0,Math.min(customBuffer.duration,10));source.onended=()=>source.disconnect();return;
+   }
+   const start=alertAudio.currentTime;
+   for(const offset of [0,0.35]){
+    const oscillator=alertAudio.createOscillator(),gain=alertAudio.createGain();
+    oscillator.connect(gain);gain.connect(alertAudio.destination);
+    oscillator.frequency.value=880;
+    gain.gain.setValueAtTime(0,start+offset);
+    gain.gain.linearRampToValueAtTime(0.15,start+offset+0.01);
+    gain.gain.setValueAtTime(0.15,start+offset+0.18);
+    gain.gain.linearRampToValueAtTime(0,start+offset+0.2);
+    oscillator.start(start+offset);oscillator.stop(start+offset+0.21);
+    oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
+   }
   }).catch(()=>{});
  }catch(e){}
 }
 $("enableAlerts").onclick=async()=>{
  try{
-  const Audio=window.AudioContext||window.webkitAudioContext;
-  if(!Audio)throw new Error("Suono non disponibile in questo browser.");
-  if(!alertAudio)alertAudio=new Audio();
-  await alertAudio.resume();alertsEnabled=true;soundAlert();
-  $("alertStatus").textContent="Suono attivo. Controllo ogni 30 secondi con pannello aperto. PC in sospensione o schede inattive possono ritardare gli avvisi.";
+  await enableAudio();await savedSoundReady;
+  if(savedSound&&!customBuffer){
+   try{customBuffer=await alertAudio.decodeAudioData(savedSound.bytes.slice(0));}
+   catch(e){savedSound=null;$("soundName").textContent="MP3 salvato non leggibile. Uso il doppio bip: carica di nuovo il file.";}
+  }
+  alertsEnabled=true;soundAlert();
+  $("alertStatus").textContent=(customBuffer?"MP3 attivo. ":"Doppio bip attivo. ")+"Controllo ogni 30 secondi con pannello aperto. PC in sospensione o schede inattive possono ritardare gli avvisi.";
   $("enableAlerts").textContent="Prova suono";
  }catch(e){$("alertStatus").textContent="Suono non attivato. Gli avvisi visivi restano disponibili.";}
 };

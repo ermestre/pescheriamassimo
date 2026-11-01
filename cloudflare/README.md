@@ -87,3 +87,12 @@ Il Worker include anche conferma WhatsApp e avvisi per nuovi ordini. Per attivar
 - Il pannello è un registro interno degli ordini online, non uno strumento fiscale o una riconciliazione automatica bancaria. Il suono e il CSV vanno provati nel browser del gestore dopo la distribuzione.
 
 Verifica locale: node tests/worker.test.mjs (SQLite reale in memoria, batch con rollback, retry, importi, rimborsi, date italiane, CSV e script HTML effettivamente servito), node tests/orders.test.cjs, node tests/menu.test.cjs. Nessun ordine o pagamento di produzione è stato creato dai test.
+
+
+## MP3 per avvisi (1 novembre 2026)
+
+Nel pannello, Suono personalizzato permette di caricare un MP3 fino a 5 MB. Il file viene decodificato prima dell'uso e salvato in IndexedDB del browser, senza caricarlo su Cloudflare o GitHub. Vengono riprodotti al massimo i primi 10 secondi. Su un altro dispositivo/browser occorre selezionarlo nuovamente; cancellando i dati del sito si perde la scelta. Se lo storage non è disponibile, il file resta attivo solo nella pagina corrente con avviso esplicito.
+
+Attiva avvisi/Prova suono abilita l'audio dopo il gesto dell'utente e recupera il file salvato. Ripristina doppio bip elimina la scelta locale. Il suono di base è composto da due bip. Il caricamento di un file danneggiato non sostituisce il suono precedente. Il pannello deve restare aperto, con audio consentito e PC attivo.
+
+Verifica: node tests/alerts.test.mjs esegue la logica del pannello servito dal Worker con AudioContext e IndexedDB simulati (doppio bip, MP3, limite, file corrotto, riapertura e ripristino). Non è un test acustico reale: verificare il file MP3 sul browser del gestore dopo la distribuzione del Worker completo.
