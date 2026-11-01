@@ -96,3 +96,12 @@ Nel pannello, Suono personalizzato permette di caricare un MP3 fino a 5 MB. Il f
 Attiva avvisi/Prova suono abilita l'audio dopo il gesto dell'utente e recupera il file salvato. Ripristina doppio bip elimina la scelta locale. Il suono di base è composto da due bip. Il caricamento di un file danneggiato non sostituisce il suono precedente. Il pannello deve restare aperto, con audio consentito e PC attivo.
 
 Verifica: node tests/alerts.test.mjs esegue la logica del pannello servito dal Worker con AudioContext e IndexedDB simulati (doppio bip, MP3, limite, file corrotto, riapertura e ripristino). Non è un test acustico reale: verificare il file MP3 sul browser del gestore dopo la distribuzione del Worker completo.
+
+
+## Ricordami su questo dispositivo (1 novembre 2026)
+
+La spunta è disattivata per impostazione iniziale. Se selezionata, dopo un accesso riuscito salva la chiave amministrativa in localStorage di quel browser e ripristina automaticamente la sessione alla riapertura. È la chiave effettiva, non un token a scadenza: chi usa quel profilo browser può accedere agli ordini. Usare solo sul proprio dispositivo. Senza spunta, la chiave rimane solo in memoria.
+
+Esci rimuove la chiave salvata e chiude la pagina autenticata. Una risposta 401 rimuove una chiave non più valida. In caso di storage bloccato compare un messaggio; l'accesso temporaneo rimane possibile. La scelta è separata per PC/browser, come il file MP3. L'audio richiede ancora Attiva avvisi dopo una nuova apertura. L'aggiornamento completo del Worker conserva tutte le funzioni precedenti.
+
+Verifica: node tests/access.test.mjs esegue lo script HTML effettivamente servito in un ambiente DOM/storage simulato, coprendo consenso, riapertura, logout, sessione temporanea, chiave rifiutata e storage bloccato. Suite Worker e avvisi passate. Verificare sul browser reale dopo la distribuzione.
