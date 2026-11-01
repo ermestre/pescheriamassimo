@@ -41,13 +41,14 @@ function basicOrder(body){
  const seen=new Set();
  const items=body.items.map(i=>{
   if(!i || typeof i.id!=='string'||i.id.length>100 || seen.has(i.id) || typeof i.quantity!=='number'||!Number.isFinite(i.quantity)||i.quantity<=0||i.quantity>100)fail('Quantità non valida');
-  seen.add(i.id);return {id:i.id,quantity:i.quantity};
+  const preparation=i.preparation??'';if(typeof preparation!=='string'||preparation.length>60)fail('Preparazione non valida');
+  seen.add(i.id);return {id:i.id,quantity:i.quantity,preparation};
  }).sort((a,b)=>a.id.localeCompare(b.id));
  if(!Number.isSafeInteger(body.expected_total_cents)||body.expected_total_cents<0||body.expected_total_cents>1000000)fail('Totale non valido');
  return {id,customer_name:name,customer_phone:phone,pickup_date:date,pickup_time:time,notes,items,total_cents:body.expected_total_cents};
 }
 function sameOrder(row,order){
- return ['customer_name','customer_phone','pickup_date','pickup_time','notes','total_cents'].every(k=>row[k]===order[k]) && JSON.stringify(JSON.parse(row.items_json).map(i=>({id:i.id,quantity:i.quantity})).sort((a,b)=>a.id.localeCompare(b.id)))===JSON.stringify(order.items);
+ return ['customer_name','customer_phone','pickup_date','pickup_time','notes','total_cents'].every(k=>row[k]===order[k]) && JSON.stringify(JSON.parse(row.items_json).map(i=>({id:i.id,quantity:i.quantity,preparation:i.preparation??''})).sort((a,b)=>a.id.localeCompare(b.id)))===JSON.stringify(order.items);
 }
 function priceOrder(order,menu,now=new Date()){
  const current=rome(now);
@@ -60,6 +61,8 @@ function priceOrder(order,menu,now=new Date()){
   const v=category?.voci.find(v=>v.id===item.id);
   if(!v || !v.disponibile || ['esaurito','terminato'].includes(v.stato))fail('Un prodotto non è più disponibile. Aggiorna il menu.',409);
   if(category.periodo && (!category.periodo.dal || !category.periodo.al || current.date<category.periodo.dal || current.date>category.periodo.al))fail('Prodotto fuori periodo',409);
+  const allowed=v.preparazioni||[];if(item.preparation && !allowed.includes(item.preparation))fail('Preparazione non disponibile per '+v.nome);
+  if(allowed.length && !item.preparation)fail('Scegli la preparazione per '+v.nome);
   const step=v.unita==='kg'?.5:1;
   if(Math.abs(item.quantity/step-Math.round(item.quantity/step))>1e-8)fail('Quantità non valida per '+v.nome);
   if(typeof v.prezzo!=='number'||!Number.isFinite(v.prezzo)||v.prezzo<0)fail('Prezzo da verificare',503);
@@ -103,7 +106,7 @@ async function publicApi(request,env){
  try{
   if(!env.db || typeof env.ADMIN_TOKEN!=='string' || env.ADMIN_TOKEN.length<20)fail('Ordini online non ancora configurati',503);
   if(url.pathname==='/api/config' && request.method==='GET'){
-   const menu=await readMenu();return respond({ok:true,menu,days:pickupDays(menu,new Date())});
+   const menu=await readMenu();return respond({ok:true,menu,preparations_supported:true,days:pickupDays(menu,new Date())});
   }
   if(url.pathname!=='/api/submit' || request.method!=='POST')return respond({errore:'Operazione non disponibile'},404);
   if(!origin)fail('Invia l’ordine dal sito della pescheria',403);
@@ -221,7 +224,7 @@ async function load(){
   card.append(element("h2",o.customer_name+" · "+money(o.total_cents)),element("small","Codice: "+o.id),element("p","Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time),element("p","Cellulare: "+o.customer_phone));
   if(o.notes)card.append(element("p","Note: "+o.notes));
   const list=element("ul","");
-  for(const item of o.items)list.append(element("li",(item.quantity??item.qta??"")+" "+(item.unit??item.unita??"")+" · "+(item.name??item.nome??item.id??"Prodotto")));
+  for(const item of o.items)list.append(element("li",(item.quantity??item.qta??"")+" "+(item.unit??item.unita??"")+" · "+(item.name??item.nome??item.id??"Prodotto")+(item.preparation?" · "+item.preparation:"")));
   card.append(list);
   const paid=element("input","");paid.type="checkbox";paid.checked=!!o.paid;
   const label=element("label","");label.append(paid,document.createTextNode(" Pagato"));card.append(label);

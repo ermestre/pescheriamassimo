@@ -57,7 +57,7 @@
       "nome": "Pesce fresco",
       "voci": [
         {
-          "id": "spigola-orata",
+          "id": "spigola",
           "nome_scientifico": "",
           "zona_fao": "",
           "metodo": "",
@@ -65,15 +65,19 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Spigola / Orata",
-          "descrizione": "Pesce fresco del giorno",
+          "nome": "Spigola",
+          "descrizione": "Prezzo di esempio, da verificare con la pescheria.",
           "prezzo": 24,
           "unita": "kg",
           "foto": "img/spigola-orata.jpg",
-          "disponibile": true
+          "disponibile": true,
+          "preparazioni": [
+            "Intero"
+          ],
+          "foto_didascalia": "Immagine indicativa"
         },
         {
-          "id": "rombo-sogliola",
+          "id": "orata",
           "nome_scientifico": "",
           "zona_fao": "",
           "metodo": "",
@@ -81,12 +85,56 @@
           "data_arrivo": "",
           "attrezzo": "",
           "allergeni": "",
-          "nome": "Rombo / Sogliola",
-          "descrizione": "Pesce fresco del giorno",
+          "nome": "Orata",
+          "descrizione": "Prezzo di esempio, da verificare con la pescheria.",
+          "prezzo": 24,
+          "unita": "kg",
+          "foto": "img/spigola-orata.jpg",
+          "disponibile": true,
+          "preparazioni": [
+            "Intero"
+          ],
+          "foto_didascalia": "Immagine indicativa"
+        },
+        {
+          "id": "rombo",
+          "nome_scientifico": "",
+          "zona_fao": "",
+          "metodo": "",
+          "provenienza": "",
+          "data_arrivo": "",
+          "attrezzo": "",
+          "allergeni": "",
+          "nome": "Rombo",
+          "descrizione": "Prezzo di esempio, da verificare con la pescheria.",
           "prezzo": 28,
           "unita": "kg",
           "foto": "img/rombo-sogliola.jpg",
-          "disponibile": true
+          "disponibile": true,
+          "preparazioni": [
+            "Intero"
+          ],
+          "foto_didascalia": "Immagine indicativa"
+        },
+        {
+          "id": "sogliola",
+          "nome_scientifico": "",
+          "zona_fao": "",
+          "metodo": "",
+          "provenienza": "",
+          "data_arrivo": "",
+          "attrezzo": "",
+          "allergeni": "",
+          "nome": "Sogliola",
+          "descrizione": "Prezzo di esempio, da verificare con la pescheria.",
+          "prezzo": 28,
+          "unita": "kg",
+          "foto": "img/rombo-sogliola.jpg",
+          "disponibile": true,
+          "preparazioni": [
+            "Intero"
+          ],
+          "foto_didascalia": "Immagine indicativa"
         },
         {
           "id": "gamberi-rossi",

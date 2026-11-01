@@ -16,7 +16,7 @@ function request(path,body,extra={}){return new Request('https://worker.test'+pa
 const now=new Date();const day=new Date(now.getTime()+3*86400000).toISOString().slice(0,10);
 const config=await (await worker.fetch(request('/api/config'),env)).json();
 const future=config.days.find(d=>d>day);
-const input={id:crypto.randomUUID(),customer_name:'Prova <script>',customer_phone:'3331234567',pickup_date:future,pickup_time:'18:30',notes:'Pulire',items:[{id:'spigola-orata',quantity:1}],expected_total_cents:2400,website:''};
+const input={id:crypto.randomUUID(),customer_name:'Prova <script>',customer_phone:'3331234567',pickup_date:future,pickup_time:'18:30',notes:'Pulire',items:[{id:'spigola',quantity:1,preparation:'Intero'}],expected_total_cents:2400,website:''};
 let r=await worker.fetch(request('/api/submit',input),env);assert.equal(r.status,201);assert.equal((await r.json()).total_cents,2400);
 r=await worker.fetch(request('/api/submit',input),env);assert.equal(r.status,200);assert.equal((await r.json()).already_received,true);
 assert.equal(sqlite.prepare('SELECT count(*) n FROM orders').get().n,1);
@@ -26,12 +26,14 @@ assert.equal((await worker.fetch(request('/api/submit',{...input,id:crypto.rando
 assert.equal((await worker.fetch(request('/api/submit',input,{headers:{Origin:'https://evil.test'}}),env)).status,403);
 assert.equal((await worker.fetch(request('/api/orders?date='+future),env)).status,401);
 const headers={Authorization:'Bearer '+env.ADMIN_TOKEN};
-r=await worker.fetch(request('/api/orders?date='+future,null,{headers}),env);assert.equal(r.status,200);const saved=(await r.json()).orders[0];assert.equal(saved.items[0].unit_price_cents,2400);
+r=await worker.fetch(request('/api/orders?date='+future,null,{headers}),env);assert.equal(r.status,200);const saved=(await r.json()).orders[0];assert.equal(saved.items[0].unit_price_cents,2400);assert.equal(saved.items[0].preparation,'Intero');
+assert.equal((await worker.fetch(request('/api/submit',{...input,items:[{...input.items[0],preparation:'Pulito'}]}),env)).status,409);
+assert.equal((await worker.fetch(request('/api/submit',{...input,id:crypto.randomUUID(),items:[{...input.items[0],preparation:'Non autorizzato'}]}),env)).status,400);
 menu.categorie[1].voci[0].prezzo=30;
 r=await worker.fetch(request('/api/submit',input),env);assert.equal(r.status,200);assert.equal((await r.json()).total_cents,2400);
 assert.equal((await worker.fetch(request('/api/submit',{...input,id:crypto.randomUUID()}),env)).status,409);
-assert.throws(()=>basicOrder({...input,items:[{id:'spigola-orata',quantity:0}]}));
-assert.throws(()=>priceOrder(basicOrder({...input,items:[{id:'spigola-orata',quantity:.25}]}),menu));
+assert.throws(()=>basicOrder({...input,items:[{id:'spigola',quantity:0}]}));
+assert.throws(()=>priceOrder(basicOrder({...input,items:[{id:'spigola',quantity:.25}]}),menu));
 assert.throws(()=>priceOrder(basicOrder({...input,pickup_date:'2026-01-01'}),menu));
 menu.categorie[1].voci[0].stato='esaurito';
 assert.throws(()=>priceOrder(basicOrder(input),menu));
@@ -70,7 +72,7 @@ const context=vm.createContext({console,Date,Intl,JSON,Math,Number,String,Object
  if(url.endsWith('/api/submit')&&lose){lose=false;throw new TypeError('Lost response');}return result;
 }});
 const html=fs.readFileSync(new URL('index.html',root),'utf8');vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
-vm.runInContext('menu='+JSON.stringify(menu)+';apiPronta=true;cambia("spigola-orata",1)',context);
+vm.runInContext('menu='+JSON.stringify(menu)+';apiPronta=true;supportaPreparazioni=true;cambia("spigola",1)',context);
 node('nome').value='Test UI';node('cellulare').value='3331234567';node('giorno').value=future;node('ora').value='18:30';
 const before=sqlite.prepare('SELECT count(*) n FROM orders').get().n;
 await node('inviaOrdine').listeners.click();assert.match(node('invioStato').textContent,/stesso codice/);
