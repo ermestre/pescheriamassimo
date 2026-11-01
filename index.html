@@ -142,6 +142,7 @@ const ORARI_SERA = ["18:30","19:00","19:30","20:00"]; // ritiro serale per la fr
 // ---- STATO ----
 let menu = null;
 const carrello = {}; // id -> { voce, qta }
+let ultimoOrdine = { firma: "", codice: "" };
 
 const fmt = n => n.toFixed(2).replace(".", ",") + " €";
 const tutte = () => menu.categorie.flatMap(c => c.voci);
@@ -210,6 +211,7 @@ function render() {
 
 function cambia(id, delta) {
   const voce = tutte().find(v => v.id === id);
+  if (!voce || (delta > 0 && (!voce.disponibile || voce.stato === "esaurito" || voce.stato === "terminato"))) return;
   const attuale = carrello[id] ? carrello[id].qta : 0;
   // kg: mezzo chilo per tocco; etto: un etto per tocco
   const passo = voce.unita === "kg" ? 0.5 : 1;
@@ -262,7 +264,7 @@ function testoOrdine() {
     const u = r.voce.unita ? ` (${r.voce.unita})` : "";
     // Peso esplicito: il cliente e Massimo leggono subito quanti grammi o chili
     const peso = r.voce.unita === "kg" ? `${fmtQ(r.qta)} kg` : r.voce.unita === "etto" ? `${Math.round(r.qta * 100)} g` : "";
-    return `- ${fmtQ(r.qta)} x ${r.voce.nome}${u}${peso ? ` = ${peso}` : ""}`;
+    return `- ${fmtQ(r.qta)} x ${r.voce.nome}${u}${peso ? ` = ${peso}` : ""} · ${fmt(r.voce.prezzo)}${r.voce.unita ? "/" + r.voce.unita : "/porzione"} · ${fmt(r.voce.prezzo * r.qta)}`;
   });
   const nome = document.getElementById("nome").value.trim() || "(senza nome)";
   const cell = document.getElementById("cellulare").value.replace(/\s+/g, "");
@@ -271,7 +273,10 @@ function testoOrdine() {
   const note = document.getElementById("note").value.trim();
   let t = `Ordine Pescheria da Massimo\nNome: ${nome}${cell ? `\nCellulare: ${cell}` : ""}\nRitiro: ${giorno} alle ${ora}\n\n${righe.join("\n")}\n\nTotale indicativo: ${fmt(totale())}`;
   if (note) t += `\n\nNote: ${note}`;
-  return t;
+  if (ultimoOrdine.firma !== t) {
+    ultimoOrdine = { firma: t, codice: crypto.randomUUID() };
+  }
+  return t.replace("Ordine Pescheria da Massimo\n", `Ordine Pescheria da Massimo\nCodice ordine: ${ultimoOrdine.codice}\n`);
 }
 
 document.getElementById("ordina").addEventListener("click", () => {
@@ -306,7 +311,7 @@ function apriCarta(id) {
     ${righe.length ? `<dl class="carta-dati">${righe.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>` : ""}
     ${consiglio}
     <div class="azioni-carta">
-      <button class="principale-carta" onclick="aggiungiDaCarta('${v.id}')">Aggiungi all'ordine</button>
+      <button class="principale-carta" onclick="aggiungiDaCarta('${v.id}')" ${!v.disponibile || v.stato === "esaurito" || v.stato === "terminato" ? "disabled" : ""}>${v.stato === "esaurito" ? "Esaurito" : "Aggiungi all'ordine"}</button>
       <button class="chiudi-carta" onclick="chiudiCarta()">Chiudi</button>
     </div>`;
   document.getElementById("carta").classList.add("aperta");
@@ -338,3 +343,4 @@ fetch("menu.json", { cache: "no-store" })
 </script>
 </body>
 </html>
+
