@@ -2,13 +2,13 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="festivita-20261101">
+<meta name="pm-release" content="banner-festivita-20261101">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Pescheria da Massimo</title>
 <style>
   :root { --blu:#1f3b5c; --sabbia:#f6f1e7; --oro:#e0a526; --grigio:#6b6b6b; --verde:#1e8e3e; --rosso:#b3261e; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--sabbia); color:#222; padding-bottom: 96px; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--sabbia); color:#222; padding-bottom: 150px; }
   header { background: var(--blu); color:#fff; padding: 16px; }
   header h1 { margin:0; font-size: 20px; }
   header p { margin: 4px 0 0; font-size: 13px; opacity:.85; }
@@ -54,6 +54,7 @@
   .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
   .consiglio p { margin: 4px 0 0; white-space:pre-wrap; }
   .miniatura { width: 100%; max-height: 160px; object-fit: contain; background:#fff; border-radius: 8px; margin-bottom: 8px; }
+.riscontro-alto{position:sticky;top:55px;z-index:6;box-shadow:0 2px 8px #0002}.barra{flex-wrap:wrap}#statoBarra{flex-basis:100%;font-size:13px;color:var(--blu);margin:0}input[type="checkbox"]{width:22px;height:22px;vertical-align:middle}.festa-stato{padding:12px;border-left:4px solid var(--oro);background:#fff6df;border-radius:8px;font-size:14px}
 </style>
 </head>
 <body>
@@ -79,6 +80,7 @@
       <button data-scheda-btn="pesce">Pesce del giorno</button>
       <button data-scheda-btn="natale">Festività</button>
     </nav>
+    <div class="stato riscontro-alto" id="statoAlto" role="status" aria-live="polite"></div>
 
     <!-- SCHEDA MENU -->
     <div data-scheda="menu">
@@ -168,6 +170,7 @@
 </div>
 
 <div class="barra nascosto" id="barra">
+  <p id="statoBarra"></p>
   <button class="secondario" id="btnRicarica">Ricarica</button>
   <button class="principale" id="btnSalva">Salva modifiche</button>
 </div>
@@ -245,9 +248,8 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
 
 function messaggio(testo, tipo) {
-  const s = $("stato");
-  s.textContent = testo;
-  s.className = "stato " + tipo;
+  for(const id of ["stato","statoAlto"]){const s=$(id);s.textContent=testo;s.className="stato "+tipo+(id==="statoAlto"?" riscontro-alto":"");}
+  $("statoBarra").textContent=testo;
 }
 
 function codice() { try { return localStorage.getItem("pm_token") || ""; } catch (e) { return ""; } }
@@ -323,7 +325,7 @@ function mostraScheda(nome) {
 document.querySelectorAll("[data-scheda-btn]").forEach(b => b.addEventListener("click", () => mostraScheda(b.dataset.schedaBtn)));
 
 // ---- EDITOR ----
-function segna() { sporco = true; }
+function segna() { sporco = true; $("statoBarra").textContent="Modifiche da salvare"; aggiornaEsitoFesta(); }
 function tutteLeVoci() { return dati.categorie.flatMap(c => c.voci); }
 
 function mostraEditor() {
@@ -353,9 +355,17 @@ function mostraEditor() {
   $("catalogo").innerHTML = CATALOGO.map((s, i) => `<option value="${i}">${esc(s.nome)} (${esc(s.scientifico)})</option>`).join("");
 }
 
+function statoFestivita(c){
+ const n=c.voci.filter(v=>v.disponibile&&!['terminato','esaurito'].includes(v.stato)).length;
+ const oggi=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Rome'});
+ const stato=c.attiva!==true?'Bozza: la festività non è pubblicata.':!c.periodo?.dal||!c.periodo?.al?'Compila il periodo di visibilità.':oggi<c.periodo.dal?'La festività comparirà dal '+c.periodo.dal+'.':oggi>c.periodo.al?'Il periodo è terminato: la festività è nascosta.':'La festività è visibile oggi nel menu clienti.';
+ return stato+' '+n+' prodotti ordinabili. Le voci non in vendita restano nascoste; quelle esaurite restano visibili. Questa è la configurazione dell’editor: premi Salva modifiche per pubblicare i cambiamenti.';
+}
+function aggiornaEsitoFesta(){if(!dati)return;const c=dati.categorie.find(c=>c.id==='natale');if(c)$("esitoFestivita").textContent=statoFestivita(c);}
+
 function festivitaHtml(c,ci){
  const ricorrenze=['Natale','Capodanno','Pasqua','Ferragosto','Altra ricorrenza'];
- return `<label><input type="checkbox" ${c.attiva===true?'checked':''} onchange="aggiornaFesta(${ci},'attiva',this.checked)"> Pubblica il menu della festività</label>
+ return `<p class="festa-stato" id="esitoFestivita">${esc(statoFestivita(c))}</p><label class="check"><input type="checkbox" ${c.attiva===true?'checked':''} onchange="aggiornaFesta(${ci},'attiva',this.checked)"> Pubblica il menu della festività</label>
  <p class="piccolo">Senza questa spunta resta una bozza. Compila le date prima di pubblicare. Gli orari di ritiro restano quelli del menu ordinario.</p>
  <div class="campi"><div><label>Ricorrenza</label><select onchange="scegliFesta(${ci},this.value)">${ricorrenze.map(x=>`<option ${x===(c.ricorrenza||'Natale')?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
  <div><label>Titolo visibile ai clienti</label><input value="${esc(c.nome)}" onchange="aggiornaFesta(${ci},'nome',this.value)"></div></div>
