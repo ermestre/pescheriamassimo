@@ -105,3 +105,18 @@ La spunta è disattivata per impostazione iniziale. Se selezionata, dopo un acce
 Esci rimuove la chiave salvata e chiude la pagina autenticata. Una risposta 401 rimuove una chiave non più valida. In caso di storage bloccato compare un messaggio; l'accesso temporaneo rimane possibile. La scelta è separata per PC/browser, come il file MP3. L'audio richiede ancora Attiva avvisi dopo una nuova apertura. L'aggiornamento completo del Worker conserva tutte le funzioni precedenti.
 
 Verifica: node tests/access.test.mjs esegue lo script HTML effettivamente servito in un ambiente DOM/storage simulato, coprendo consenso, riapertura, logout, sessione temporanea, chiave rifiutata e storage bloccato. Suite Worker e avvisi passate. Verificare sul browser reale dopo la distribuzione.
+
+
+## Menu delle festività (1 novembre 2026)
+
+La scheda di gestione Natale diventa Festività. L'ID interno natale rimane per conservare i dati esistenti. Si gestisce una ricorrenza per volta: Natale, Capodanno, Pasqua, Ferragosto o altra. Scegliere una ricorrenza cambia il titolo suggerito senza cancellare i piatti. La presentazione e il titolo sono modificabili. Nessun piatto, prezzo, ricorrenza o apertura viene inventato o pubblicato automaticamente.
+
+Configurazione: selezionare ricorrenza, titolo e presentazione; impostare periodo di visibilità e giorno unico di ritiro; facoltativamente data/ora assoluta di chiusura delle prenotazioni; aggiungere i piatti con il pulsante dedicato. Un piatto nuovo parte non in vendita con prezzo 0: compilare nome, porzioni, prezzo e disponibilità. Pubblica il menu della festività abilita la sezione nelle sole date previste. Togliere la spunta permette di salvare bozze incomplete. Le eventuali sezioni già pubblicate con periodo sono preservate alla lettura. Il primo salvataggio applica il flag esplicito.
+
+Il menu clienti mostra presentazione, ritiro e scadenza sopra i prodotti, con le normali quantità e informazioni del pesce. Scegliendo un piatto festivo viene selezionata la data speciale, quando disponibile nel servizio ordini. Gli orari restano quelli del menu ordinario, non ci sono limiti di capienza per fascia. Prenotazioni scadute restano visibili ma non ordinabili. Non vengono creati menu completi per 2/4/6 persone o proposte precompilate: aggiungerli come prodotti solo dopo accordo con Massimo.
+
+Il Worker aggiunge la data di ritiro esplicitamente configurata anche oltre la finestra ordinaria di 14 giorni (e anche di lunedì, come apertura speciale esplicita). Le chiusure impostate in ritiro.chiusure restano prioritarie. In una data fuori dai giorni ordinari sono accettati solo piatti festivi; per i piatti festivi è richiesta esattamente la loro data. Il server verifica pubblicazione, periodo e scadenza in Europe/Rome. Se manca una scadenza assoluta rimangono i termini relativi ordinari. Gli ordini conservano nei prodotti l'occasione scelta, visibile nel pannello.
+
+Distribuzione: menu e gestione si aggiornano con GitHub Pages. Sostituire e distribuire l'intero cloudflare/worker.js su Cloudflare prima di attivare le prenotazioni festive. Il client abilita i prodotti festivi solo quando il servizio dichiara festivities_supported:true; con Worker precedente mostra Prenotazioni della festività in preparazione. Non serve SQL aggiuntivo. Le altre funzioni del pannello sono incluse nel file completo.
+
+Verifica: tests/festivities.test.mjs copre ritiro oltre 14 giorni, rifiuto data sbagliata e prodotti ordinari sulla data speciale, scadenza italiana al minuto, bozza, lunedì esplicito e chiusure; tests/menu.test.cjs copre editor, date, testi e bozze. Suite Worker, accesso e avvisi passate. Nessun ordine reale inserito dai test; verifica visiva nel browser ancora da fare.
