@@ -72,3 +72,18 @@ Nella gestione, lotto_fornitore è il codice originale; paese_origine e data_pes
 Al salvataggio, registraArrivi conserva in archivio_arrivi una fotografia dei soli campi pubblici di provenienza del prodotto quando esiste un lotto. Salvataggi identici non duplicano le copie; un lotto nuovo o una correzione genera una nuova copia. L'archivio è conservato nel menu.json pubblico su GitHub, consultabile in gestione come sola lettura: non inserire fatture o dati personali. Non è un registro privato né sostituisce la documentazione del fornitore. Un prodotto con lotto/storico può essere nascosto con Terminato e non viene eliminato dalla UI.
 
 Questa versione gestisce un lotto corrente per voce di menu. Per esporre contemporaneamente partite differenti della stessa specie occorrono voci distinte; non viene dedotto il lotto effettivamente consegnato al banco. I dati inseriti nell'ordine descrivono il lotto mostrato al momento della prenotazione.
+
+
+## Resoconto e registro incassi (1 novembre 2026)
+
+Il Worker include anche conferma WhatsApp e avvisi per nuovi ordini. Per attivare tutto, sostituire l'intero cloudflare/worker.js nell'editor Cloudflare e distribuire. Nessuna modifica al menu clienti o SQL manuale: la tabella payment_events viene creata con CREATE TABLE IF NOT EXISTS alla prima chiamata amministrativa autenticata. Gli ordini esistenti restano intatti.
+
+- Registra incasso salva importo effettivo in centesimi, contanti/carta, data e ora server. Si registra il saldo completo, non acconti o pagamenti frazionati. L'importo effettivo può differire dalla stima del menu.
+- Registra rimborso totale aggiunge un movimento negativo e riapre il saldo. Scegliere il metodo con cui il denaro viene effettivamente restituito. Non elimina il movimento originale. Annullare un ordine non restituisce denaro e non crea automaticamente rimborsi.
+- I movimenti hanno un codice univoco e vengono salvati con batch atomico D1: le ripetizioni dello stesso movimento non duplicano gli incassi. I metodi di modifica del vecchio flag paid sono disabilitati a favore del registro.
+- I pagamenti già segnati prima dell'aggiornamento rimangono pagati ma non hanno data, metodo o importo effettivo verificabili. Non sono inventati movimenti retroattivi; il rimborso dal registro è disponibile solo per incassi registrati con la nuova funzione.
+- Resoconto giornaliero distingue ordini e prodotti per data di ritiro da incassi e rimborsi per giorno del movimento in Europe/Rome. Il totale ordini e il residuo sono stime del menu; gli incassi sono importi effettivamente registrati dall'operatore. I prodotti includono gli ordini non annullati, anche se non ancora ritirati: non sono una misura delle vendite completate.
+- CSV dei movimenti include giorno/ora italiani, codici, cliente, tipo, metodo e importo. I valori negativi dei rimborsi restano numerici; i testi potenzialmente interpretati come formule sono neutralizzati. Il download contiene dati dei clienti e va conservato dal gestore.
+- Il pannello è un registro interno degli ordini online, non uno strumento fiscale o una riconciliazione automatica bancaria. Il suono e il CSV vanno provati nel browser del gestore dopo la distribuzione.
+
+Verifica locale: node tests/worker.test.mjs (SQLite reale in memoria, batch con rollback, retry, importi, rimborsi, date italiane, CSV e script HTML effettivamente servito), node tests/orders.test.cjs, node tests/menu.test.cjs. Nessun ordine o pagamento di produzione è stato creato dai test.

@@ -134,6 +134,54 @@ async function authorized(request,env){
   let diff=0; for(let i=0;i<a.length;i++) diff|=a[i]^b[i];
   return diff===0;
 }
+
+function romeDay(date=new Date()){
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+ const get=t=>parts.find(p=>p.type===t).value;return get('year')+'-'+get('month')+'-'+get('day');
+}
+const PAYMENT_SCHEMA=`CREATE TABLE IF NOT EXISTS payment_events (id TEXT PRIMARY KEY, order_id TEXT NOT NULL, kind TEXT NOT NULL, amount_cents INTEGER NOT NULL, method TEXT NOT NULL, created_at TEXT NOT NULL, business_date TEXT NOT NULL)`;
+async function paymentApi(request,env,url){
+ if(url.pathname==='/api/payments'&&request.method==='POST'){
+  const raw=await request.text();if(raw.length>1000)return json({errore:'Richiesta troppo grande'},413);
+  let b;try{b=JSON.parse(raw);}catch{return json({errore:'Dati non validi'},400);}
+  if(!b||!isUuid(b.id)||typeof b.order_id!=='string'||!['payment','refund'].includes(b.kind))return json({errore:'Movimento non valido'},400);
+  const prior=await env.db.prepare('SELECT * FROM payment_events WHERE id=?').bind(b.id).first();
+  if(prior)return prior.order_id===b.order_id&&prior.kind===b.kind&&prior.method===b.method&&(b.kind==='refund'||prior.amount_cents===b.amount_cents)?json({ok:true}):json({errore:'Codice movimento già utilizzato'},409);
+  const order=await env.db.prepare('SELECT * FROM orders WHERE id=?').bind(b.order_id).first();
+  if(!order)return json({errore:'Ordine non trovato'},404);
+  let amount=b.amount_cents,method=b.method;
+  if(b.kind==='payment'){
+   if(order.paid||order.status==='cancelled')return json({errore:'Ordine già pagato o annullato'},409);
+   if(!Number.isSafeInteger(amount)||amount<1||amount>10000000||!['cash','card'].includes(method))return json({errore:'Inserisci un importo valido e contanti o carta'},400);
+  }else{
+   const balance=await env.db.prepare('SELECT COALESCE(SUM(amount_cents),0) AS total FROM payment_events WHERE order_id=?').bind(b.order_id).first();
+   if(!order.paid||balance.total<=0)return json({errore:'Pagamento precedente senza movimento registrato: rimborso non disponibile'},409);
+   if(!['cash','card'].includes(method))return json({errore:'Scegli come viene restituito il denaro'},400);
+   amount=-balance.total;
+  }
+  const now=new Date();const expected=b.kind==='payment'?0:1;
+  const result=await env.db.batch([
+   env.db.prepare('INSERT OR IGNORE INTO payment_events(id,order_id,kind,amount_cents,method,created_at,business_date) SELECT ?,id,?,?,?,?,? FROM orders WHERE id=? AND paid=?'+(b.kind==='payment'?" AND status != 'cancelled'":' AND (SELECT COALESCE(SUM(amount_cents),0) FROM payment_events WHERE order_id=orders.id)='+(-amount) )).bind(b.id,b.kind,amount,method,now.toISOString(),romeDay(now),b.order_id,expected),
+   env.db.prepare('UPDATE orders SET paid=? WHERE id=? AND paid=? AND EXISTS(SELECT 1 FROM payment_events WHERE id=? AND order_id=orders.id AND kind=? AND method=? AND amount_cents=?)').bind(expected?0:1,b.order_id,expected,b.id,b.kind,method,amount)
+  ]);
+  const saved=await env.db.prepare('SELECT * FROM payment_events WHERE id=?').bind(b.id).first();
+  if(!saved||saved.order_id!==b.order_id||saved.kind!==b.kind||saved.method!==method||saved.amount_cents!==amount)return json({errore:'Ordine modificato o codice movimento già usato: aggiorna e riprova'},409);
+  return json({ok:true});
+ }
+ if(url.pathname==='/api/report'&&request.method==='GET'){
+  const day=url.searchParams.get('date')||romeDay();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||Number.isNaN(Date.parse(day+'T12:00:00Z'))||new Date(day+'T12:00:00Z').toISOString().slice(0,10)!==day)return json({errore:'Data non valida'},400);
+  const movements=await env.db.prepare('SELECT p.*,o.customer_name FROM payment_events p JOIN orders o ON o.id=p.order_id WHERE business_date=? ORDER BY created_at,id LIMIT 5001').bind(day).all();
+  const orders=await env.db.prepare('SELECT * FROM orders WHERE pickup_date=? ORDER BY pickup_time,id LIMIT 5001').bind(day).all();
+  if(movements.results.length>5000||orders.results.length>5000)return json({errore:'Troppi dati per il resoconto giornaliero'},409);
+  const rows=orders.results,events=movements.results,active=rows.filter(o=>o.status!=='cancelled');
+  const sum=arr=>arr.reduce((t,p)=>t+p.amount_cents,0);
+  return json({date:day,orders:rows.map(o=>({...o,items:JSON.parse(o.items_json),items_json:undefined})),movements:events,summary:{orders:rows.length,collected:rows.filter(o=>o.status==='collected').length,cancelled:rows.filter(o=>o.status==='cancelled').length,expected_cents:active.reduce((t,o)=>t+o.total_cents,0),outstanding_cents:active.filter(o=>!o.paid).reduce((t,o)=>t+o.total_cents,0),receipts_cents:sum(events.filter(p=>p.kind==='payment')),refunds_cents:-sum(events.filter(p=>p.kind==='refund')),net_cents:sum(events),cash_cents:sum(events.filter(p=>p.method==='cash')),card_cents:sum(events.filter(p=>p.method==='card'))}});
+ }
+ return null;
+}
+function isUuid(s){return typeof s==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(s);}
+
 export default {
  async fetch(request,env){
   const url=new URL(request.url);
@@ -146,6 +194,10 @@ export default {
   if(!await authorized(request,env)) return json({errore:"Chiave di accesso non valida"},401);
   if(!env.db) return json({errore:"Database non collegato"},503);
   try{
+   await env.db.prepare(PAYMENT_SCHEMA).run();
+   await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_order ON payment_events(order_id)").run();
+   await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_day ON payment_events(business_date,created_at)").run();
+   const paymentResponse=await paymentApi(request,env,url);if(paymentResponse)return paymentResponse;
    if(url.pathname==="/api/orders" && request.method==="GET"){
     const date=url.searchParams.get("date");
     if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date+"T12:00:00Z")) || new Date(date+"T12:00:00Z").toISOString().slice(0,10)!==date)) return json({errore:"Data non valida"},400);
@@ -154,7 +206,7 @@ export default {
     const conditions=[],params=[];
     if(date){conditions.push("pickup_date = ?");params.push(date);}
     if(view==="open")conditions.push("status IN ('new','confirmed','ready')");
-    let statement=env.db.prepare("SELECT * FROM orders"+(conditions.length?" WHERE "+conditions.join(" AND "):"")+" ORDER BY pickup_date, pickup_time, created_at, id LIMIT 501");
+    let statement=env.db.prepare("SELECT orders.*, (SELECT COALESCE(SUM(amount_cents),0) FROM payment_events WHERE order_id=orders.id) AS recorded_balance_cents FROM orders"+(conditions.length?" WHERE "+conditions.join(" AND "):"")+" ORDER BY pickup_date, pickup_time, created_at, id LIMIT 501");
     if(params.length)statement=statement.bind(...params);
     const result=await statement.all();
     if(result.results.length>500) return json({errore:"Ci sono più di 500 ordini. Seleziona una data di ritiro per restringere la vista."},409);
@@ -170,8 +222,7 @@ export default {
     if(keys.length!==1 || !["paid","status"].includes(keys[0]))return json({errore:"Modifica non valida"},400);
     let query,value;
     if(keys[0]==="paid"){
-     if(typeof body.paid!=="boolean")return json({errore:"Valore non valido"},400);
-     query="UPDATE orders SET paid = ? WHERE id = ?";value=body.paid?1:0;
+     return json({errore:"Usa Registra incasso o Registra rimborso per conservare i movimenti"},400);
     }else{
      if(!["new","confirmed","ready","collected","cancelled"].includes(body.status))return json({errore:"Stato non valido"},400);
      query="UPDATE orders SET status = ? WHERE id = ?";value=body.status;
@@ -188,7 +239,7 @@ const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="v
 <style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
 <h1>Ordini · Pescheria Massimo</h1>
 <form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><button>Accedi</button><p>La chiave resta in memoria fino alla chiusura o all’aggiornamento della pagina.</p></form>
-<section id="panel" hidden><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><div id="orders"></div></section>
+<section id="panel" hidden><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details><div id="orders"></div></section>
 <p id="msg" role="status" aria-live="polite"></p>
 <script>
 let token="",loadSeq=0,alertAudio=null,alertsEnabled=false,polling=false,mutations=0;
@@ -213,7 +264,7 @@ async function api(path,options={}){
  if(!response.ok){if(response.status===401)exit();throw new Error(data.errore||"Operazione non riuscita");}
  return data;
 }
-function exit(){ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;}
+function exit(){ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;}
 async function load(){
  const seq=++loadSeq;
  $("orders").replaceChildren();$("totals").textContent="";$("scope").textContent="";
@@ -226,7 +277,7 @@ async function load(){
  $("scope").textContent=($("view").value==="open"?"Ordini da gestire: nuovi, confermati e pronti":"Archivio: tutti gli stati")+($("day").value?" · Ritiro "+formatDate($("day").value):" · Tutte le date di ritiro");
  $("login").hidden=true;$("panel").hidden=false;$("orders").replaceChildren();
  const active=data.orders.filter(o=>o.status!=="cancelled");
- $("totals").textContent=active.length+" ordini · Incassato "+money(active.filter(o=>o.paid).reduce((s,o)=>s+o.total_cents,0))+" · Da incassare "+money(active.filter(o=>!o.paid).reduce((s,o)=>s+o.total_cents,0));
+ $("totals").textContent=active.length+" ordini · Da incassare (stima): "+money(active.filter(o=>!o.paid).reduce((s,o)=>s+o.total_cents,0))+" · Incassi effettivi nel resoconto giornaliero";
  for(const o of data.orders){
   const card=element("article","");
   card.append(element("h2",o.customer_name+" · "+money(o.total_cents)),element("small","Codice: "+o.id),element("p","Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time),element("p","Cellulare: "+o.customer_phone));
@@ -235,11 +286,29 @@ async function load(){
   for(const item of o.items)list.append(element("li",(item.quantity??item.qta??"")+" "+(item.unit??item.unita??"")+" · "+(item.name??item.nome??item.id??"Prodotto")+(item.preparation?" · "+item.preparation:"")));
   card.append(list);
   const paid=element("input","");paid.type="checkbox";paid.checked=!!o.paid;
-  const label=element("label","");label.append(paid,document.createTextNode(" Pagato"));card.append(label);
+  paid.hidden=true;card.append(paid);
+  card.append(element("p",o.paid?(o.recorded_balance_cents>0?"Pagato · Incasso registrato: "+money(o.recorded_balance_cents):"Pagato prima del registro · data e importo effettivo non disponibili"):"Da incassare · importo del menu indicativo"));
+  const paymentForm=element("form","");
+  const amount=element("input","");amount.type="number";amount.min="0.01";amount.max="100000";amount.step="0.01";amount.value=(o.total_cents/100).toFixed(2);amount.required=true;amount.setAttribute("aria-label","Importo effettivo in euro");
+  const method=element("select","");method.setAttribute("aria-label","Metodo pagamento");for(const [value,text] of [["cash","Contanti"],["card","Carta"]]){const opt=element("option",text);opt.value=value;method.append(opt);}
+  const payButton=element("button",o.paid?"Registra rimborso totale":"Registra incasso");
+  if(!o.paid)paymentForm.append(element("label","Importo effettivo (€)"),amount);
+  paymentForm.append(method,payButton);
+  paymentForm.oninput=()=>{paymentForm.dataset.dirty="true";};
+  let paymentId=null,paymentSignature="";
+  paymentForm.onsubmit=async e=>{
+   e.preventDefault();const kind=o.paid?"refund":"payment";
+   if(kind==="refund"&&!confirm("Registrare la restituzione completa del denaro al cliente? Usa questa funzione solo quando il denaro viene restituito."))return;
+   const body={order_id:o.id,kind,method:method.value,...(kind==="payment"?{amount_cents:Math.round(Number(amount.value)*100)}:{})};
+   const signature=JSON.stringify(body);if(signature!==paymentSignature){paymentId=crypto.randomUUID();paymentSignature=signature;}
+   payButton.disabled=true;mutations++;
+   try{await api("/api/payments",{method:"POST",body:JSON.stringify({...body,id:paymentId})});await load();$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;$("reportMsg").textContent="Movimento salvato. Premi Mostra resoconto per aggiornare.";}catch(e){$("msg").textContent=e.message;payButton.disabled=false;}finally{mutations--;}
+  };
+  if((o.paid&&o.recorded_balance_cents>0)||(!o.paid&&o.status!=="cancelled"))card.append(paymentForm);
   const select=element("select","");select.setAttribute("aria-label","Stato ordine "+o.id);
   for(const [value,title] of Object.entries(states)){const option=element("option",title);option.value=value;select.append(option);}select.value=o.status;card.append(select);
   async function change(body){mutations++;paid.disabled=select.disabled=true;try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify(body)});}catch(e){$("msg").textContent=e.message;paid.checked=!!o.paid;select.value=o.status;paid.disabled=select.disabled=false;return;}finally{mutations--;}await load();}
-  paid.onchange=()=>change({paid:paid.checked});select.onchange=()=>change({status:select.value});
+  select.onchange=()=>change({status:select.value});
   if(["new","confirmed"].includes(o.status)){
    const wa=element("button",o.status==="new"?"Conferma su WhatsApp":"Invia conferma su WhatsApp");wa.type="button";
    wa.onclick=async()=>{
@@ -263,6 +332,33 @@ async function load(){
  $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":($("view").value==="open"?"Nessun ordine da gestire":"Nessun ordine in archivio")+($("day").value?" per questa data.":".");
  }catch(e){if(seq===loadSeq)$("msg").textContent=e.message;}
 }
+
+
+let reportData=null;
+const todayParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+$("reportDay").value=['year','month','day'].map(t=>todayParts.find(p=>p.type===t).value).join('-');
+$("reportDay").onchange=()=>{reportData=null;$("reportCsv").disabled=true;$("reportOutput").replaceChildren();};
+$("reportLoad").onclick=async()=>{
+ $("reportLoad").disabled=true;$("reportCsv").disabled=true;$("reportMsg").textContent="Caricamento resoconto…";const key=token;
+ try{
+  const data=await api('/api/report?date='+encodeURIComponent($("reportDay").value));if(token!==key||data.date!==$("reportDay").value)return;
+  reportData=data;const out=$("reportOutput");out.replaceChildren();const t=data.summary;
+  out.append(element('h2','Resoconto '+formatDate(data.date)),element('p',t.orders+' ordini · '+t.collected+' ritirati · '+t.cancelled+' annullati'),element('p','Totale indicativo ordini: '+money(t.expected_cents)+' · Ancora da incassare: '+money(t.outstanding_cents)),element('p','Incassi del giorno: '+money(t.receipts_cents)+' · Rimborsi: '+money(t.refunds_cents)+' · Netto: '+money(t.net_cents)),element('p','Netto contanti: '+money(t.cash_cents)+' · Netto carta: '+money(t.card_cents)));
+  out.append(element('h3','Prodotti previsti per il ritiro (esclusi annullati)'));
+  const products=new Map();for(const o of data.orders.filter(o=>o.status!=='cancelled'))for(const item of o.items){const name=item.name??item.nome??item.id;const unit=item.unit??item.unita??'';const key=JSON.stringify([name,unit,item.preparation||'']);const entry=products.get(key)||{name,unit,prep:item.preparation||'',quantity:0};entry.quantity+=Number(item.quantity??item.qta??0);products.set(key,entry);}
+  for(const p of products.values())out.append(element('p',p.name+' · '+Number(p.quantity.toFixed(3))+' '+p.unit+(p.prep?' · '+p.prep:'')));
+  out.append(element('h3','Movimenti registrati nel giorno'));
+  for(const p of data.movements)out.append(element('p',new Date(p.created_at).toLocaleTimeString('it-IT',{timeZone:'Europe/Rome'})+' · '+p.customer_name+' · '+(p.kind==='refund'?'Rimborso':'Incasso')+' · '+money(p.amount_cents)+' · '+(p.method==='cash'?'Contanti':'Carta')));
+  $("reportMsg").textContent=data.movements.length?'Resoconto aggiornato.':'Nessun movimento registrato in questa data.';$("reportCsv").disabled=false;
+ }catch(e){$("reportMsg").textContent=e.message;}finally{$("reportLoad").disabled=false;}
+};
+function csvCell(value){let text=String(value??'');if(/^\\s*[=+@-]|^[\\t\\r]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';}
+$("reportCsv").onclick=()=>{
+ if(!reportData)return;
+ const rows=[['Data italiana','Ora italiana','Codice movimento','Codice ordine','Cliente','Tipo','Metodo','Importo EUR']];
+ for(const p of reportData.movements)rows.push([p.business_date,new Date(p.created_at).toLocaleTimeString('it-IT',{timeZone:'Europe/Rome'}),p.id,p.order_id,p.customer_name,p.kind==='refund'?'Rimborso':'Incasso',p.method==='cash'?'Contanti':'Carta',(p.amount_cents/100).toFixed(2).replace('.',',')]);
+ const blob=new Blob(['\\uFEFF'+rows.map(row=>row.map((v,i)=>i===7&&/^-?[0-9]+,[0-9]{2}$/.test(String(v))?'"'+v+'"':csvCell(v)).join(';')).join('\\r\\n')],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const link=element('a','');link.href=url;link.download='movimenti-'+reportData.date+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
 
 function newOrderIds(orders){
  const fresh=orders.filter(o=>!seenOrders.has(o.id));
@@ -303,7 +399,7 @@ async function checkOrders(){
    banner.textContent=fresh.length+" nuovi ordini ricevuti: "+fresh.map(o=>o.customer_name).join(", ")+".";
    document.title="Nuovo ordine · Pescheria Massimo";soundAlert();
   }
-  if(!mutations&&!["INPUT","SELECT"].includes(document.activeElement?.tagName))await load();
+  if(!mutations&&!["INPUT","SELECT"].includes(document.activeElement?.tagName)&&!document.querySelector('form[data-dirty="true"]'))await load();
  }catch(e){if(token===activeToken)$("alertStatus").textContent="Controllo automatico non riuscito. Riprovo tra 30 secondi. Puoi premere Aggiorna.";}
  finally{polling=false;}
 }
