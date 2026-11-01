@@ -188,10 +188,11 @@ const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="v
 <style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
 <h1>Ordini · Pescheria Massimo</h1>
 <form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><button>Accedi</button><p>La chiave resta in memoria fino alla chiusura o all’aggiornamento della pagina.</p></form>
-<section id="panel" hidden><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><p id="scope"></p><p id="totals"></p><div id="orders"></div></section>
+<section id="panel" hidden><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><div id="orders"></div></section>
 <p id="msg" role="status" aria-live="polite"></p>
 <script>
-let token="",loadSeq=0;
+let token="",loadSeq=0,alertAudio=null,alertsEnabled=false,polling=false,mutations=0;
+const seenOrders=new Set();let ordersBaseline=false;
 const $=id=>document.getElementById(id);
 $("showKey").onchange=()=>{$("key").type=$("showKey").checked?"text":"password";};
 const money=n=>new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n/100);
@@ -212,7 +213,7 @@ async function api(path,options={}){
  if(!response.ok){if(response.status===401)exit();throw new Error(data.errore||"Operazione non riuscita");}
  return data;
 }
-function exit(){loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;}
+function exit(){ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;}
 async function load(){
  const seq=++loadSeq;
  $("orders").replaceChildren();$("totals").textContent="";$("scope").textContent="";
@@ -237,7 +238,7 @@ async function load(){
   const label=element("label","");label.append(paid,document.createTextNode(" Pagato"));card.append(label);
   const select=element("select","");select.setAttribute("aria-label","Stato ordine "+o.id);
   for(const [value,title] of Object.entries(states)){const option=element("option",title);option.value=value;select.append(option);}select.value=o.status;card.append(select);
-  async function change(body){paid.disabled=select.disabled=true;try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify(body)});}catch(e){$("msg").textContent=e.message;paid.checked=!!o.paid;select.value=o.status;paid.disabled=select.disabled=false;return;}await load();}
+  async function change(body){mutations++;paid.disabled=select.disabled=true;try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify(body)});}catch(e){$("msg").textContent=e.message;paid.checked=!!o.paid;select.value=o.status;paid.disabled=select.disabled=false;return;}finally{mutations--;}await load();}
   paid.onchange=()=>change({paid:paid.checked});select.onchange=()=>change({status:select.value});
   if(["new","confirmed"].includes(o.status)){
    const wa=element("button",o.status==="new"?"Conferma su WhatsApp":"Invia conferma su WhatsApp");wa.type="button";
@@ -245,7 +246,7 @@ async function load(){
     const url=confirmationUrl(o);
     if(!url){$("msg").textContent="Numero non valido: verifica il cellulare del cliente.";return;}
     const chat=window.open("about:blank","_blank");if(chat)chat.opener=null;
-    wa.disabled=paid.disabled=select.disabled=true;
+    wa.disabled=paid.disabled=select.disabled=true;mutations++;
     try{
      await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify({status:"confirmed"})});
      o.status="confirmed";select.value="confirmed";wa.textContent="Invia di nuovo la conferma";
@@ -253,7 +254,7 @@ async function load(){
      if(chat)chat.location.replace(url);
      $("msg").textContent="Ordine confermato nel pannello. Premi Invia su WhatsApp per avvisare il cliente. Se la chat non si apre, usa il link sotto l'ordine.";
     }catch(e){if(chat)chat.close();$("msg").textContent=e.message;}
-    finally{wa.disabled=paid.disabled=select.disabled=false;}
+    finally{mutations--;wa.disabled=paid.disabled=select.disabled=false;}
    };
    card.append(wa,element("small","Il messaggio parte solo quando premi Invia in WhatsApp."));
   }
@@ -262,6 +263,53 @@ async function load(){
  $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":($("view").value==="open"?"Nessun ordine da gestire":"Nessun ordine in archivio")+($("day").value?" per questa data.":".");
  }catch(e){if(seq===loadSeq)$("msg").textContent=e.message;}
 }
-$("login").onsubmit=e=>{e.preventDefault();token=$("key").value;$("key").value="";$("view").value="open";$("day").value="";load();};
+
+function newOrderIds(orders){
+ const fresh=orders.filter(o=>!seenOrders.has(o.id));
+ for(const o of orders)seenOrders.add(o.id);
+ if(!ordersBaseline){ordersBaseline=true;return [];}
+ return fresh;
+}
+function soundAlert(){
+ if(!alertsEnabled||!alertAudio)return;
+ try{
+  alertAudio.resume().then(()=>{
+   const oscillator=alertAudio.createOscillator(),gain=alertAudio.createGain();
+   oscillator.connect(gain);gain.connect(alertAudio.destination);
+   oscillator.frequency.value=880;gain.gain.value=0.15;
+   oscillator.start();oscillator.stop(alertAudio.currentTime+0.4);
+  }).catch(()=>{});
+ }catch(e){}
+}
+$("enableAlerts").onclick=async()=>{
+ try{
+  const Audio=window.AudioContext||window.webkitAudioContext;
+  if(!Audio)throw new Error("Suono non disponibile in questo browser.");
+  if(!alertAudio)alertAudio=new Audio();
+  await alertAudio.resume();alertsEnabled=true;soundAlert();
+  $("alertStatus").textContent="Suono attivo. Controllo ogni 30 secondi con pannello aperto. PC in sospensione o schede inattive possono ritardare gli avvisi.";
+  $("enableAlerts").textContent="Prova suono";
+ }catch(e){$("alertStatus").textContent="Suono non attivato. Gli avvisi visivi restano disponibili.";}
+};
+async function checkOrders(){
+ if(!token||polling||mutations)return;
+ polling=true;const activeToken=token;
+ try{
+  const result=await api("/api/orders?view=open");
+  if(token!==activeToken)return;
+  const fresh=newOrderIds(result.orders);
+  if(fresh.length){
+   const banner=$("newOrders");banner.hidden=false;
+   banner.textContent=fresh.length+" nuovi ordini ricevuti: "+fresh.map(o=>o.customer_name).join(", ")+".";
+   document.title="Nuovo ordine · Pescheria Massimo";soundAlert();
+  }
+  if(!mutations&&!["INPUT","SELECT"].includes(document.activeElement?.tagName))await load();
+ }catch(e){if(token===activeToken)$("alertStatus").textContent="Controllo automatico non riuscito. Riprovo tra 30 secondi. Puoi premere Aggiorna.";}
+ finally{polling=false;}
+}
+setInterval(checkOrders,30000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkOrders();});
+
+$("login").onsubmit=e=>{e.preventDefault();token=$("key").value;$("key").value="";$("view").value="open";$("day").value="";load().then(checkOrders);};
 $("refresh").onclick=load;$("day").onchange=load;$("view").onchange=load;$("clearDay").onclick=()=>{$("day").value="";load();};$("logout").onclick=()=>{exit();$("msg").textContent="Accesso chiuso";};
 </script></html>`;
