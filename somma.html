@@ -83,27 +83,60 @@ function trova(nome) {
       || null;
 }
 
-// Legge il testo incollato e lo divide in ordini
+// Conserva anche gli ordini precedenti senza codice o prezzi per riga.
 function leggiOrdini(testo) {
   const ordini = [];
   let cur = null;
-  const nuovo = () => { cur = { nome: "", ritiro: "", righe: [] }; ordini.push(cur); };
-
+  let nelleNote = false;
+  const nuovo = () => {
+    cur = { codice: "", nome: "", cellulare: "", note: "", ritiro: "", totaleRicevuto: null, righe: [] };
+    nelleNote = false;
+    ordini.push(cur);
+  };
   testo.split(/\r?\n/).forEach(raw => {
     const r = raw.trim();
     if (!r) return;
     if (/^ordine\b/i.test(r)) { nuovo(); return; }
     if (!cur) nuovo();
-
     let m;
-    if ((m = r.match(/^Nome:\s*(.*)$/i))) cur.nome = m[1];
+    if (nelleNote) { cur.note += "\n" + r; return; }
+    if ((m = r.match(/^Codice ordine:\s*(.*)$/i))) cur.codice = m[1];
+    else if ((m = r.match(/^Nome:\s*(.*)$/i))) cur.nome = m[1];
+    else if ((m = r.match(/^Cellulare:\s*(.*)$/i))) cur.cellulare = m[1];
     else if ((m = r.match(/^Ritiro:\s*(.*)$/i))) cur.ritiro = m[1];
-    else if (/^Totale/i.test(r) || /^Note:/i.test(r)) { /* ignorato */ }
-    else if ((m = r.match(/^-?\s*(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s*(?:\((kg|etto)\))?(?:\s*=.*)?$/i))) {
-      cur.righe.push({ qta: parseFloat(m[1].replace(",", ".")), nome: m[2].trim() });
+    else if ((m = r.match(/^Totale(?: indicativo)?:\s*(\d+(?:[.,]\d+)?)\s*€/i))) cur.totaleRicevuto = Number(m[1].replace(",", "."));
+    else if ((m = r.match(/^Note:\s*(.*)$/i))) { cur.note = m[1]; nelleNote = true; }
+    else {
+      const prezzi = r.match(/ · (\d+(?:[.,]\d+)?)\s*€\/(kg|etto|porzione) · (\d+(?:[.,]\d+)?)\s*€$/);
+      const prodotto = prezzi ? r.slice(0, prezzi.index) : r;
+      if ((m = prodotto.match(/^-?\s*(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s*(?:\((kg|etto)\))?(?:\s*=.*)?$/i))) {
+        cur.righe.push({ qta: Number(m[1].replace(",", ".")), nome: m[2].trim(),
+          unita: prezzi ? prezzi[2] : m[3],
+          importo: prezzi ? Number(prezzi[3].replace(",", ".")) : null });
+      }
     }
   });
   return ordini.filter(o => o.righe.length > 0 || o.nome);
+}
+
+// Le chiavi complete evitano collisioni e non dipendono dalla posizione nel testo.
+function chiaviOrdini(ordini) {
+  const occorrenze = new Map();
+  return ordini.map(o => {
+    const base = o.codice ? "codice:" + o.codice : "testo:" + JSON.stringify([o.nome, o.cellulare, o.ritiro, o.note, o.righe]);
+    const n = occorrenze.get(base) || 0;
+    occorrenze.set(base, n + 1);
+    return base + ":" + n;
+  });
+}
+
+function ripristinaStati(ordini, salvati, testo) {
+  const precedenti = salvati.stati || {};
+  if (!salvati.stati && salvati.testo && salvati.stato) {
+    chiaviOrdini(leggiOrdini(salvati.testo)).forEach((k, i) => { precedenti[k] = salvati.stato[i] || {}; });
+  }
+  const chiavi = chiaviOrdini(ordini);
+  ordini.forEach((o, i) => { o.chiave = chiavi[i]; o.stato = precedenti[o.chiave] || {}; });
 }
 
 function calcola() {
@@ -114,25 +147,32 @@ function calcola() {
 
   const ordini = leggiOrdini(testo);
   const salvati = caricaStato();
-  const stessoTesto = salvati.testo === testo;
-  ordini.forEach((o, i) => { o.stato = (stessoTesto && salvati.stato && salvati.stato[i]) || {}; });
+  ripristinaStati(ordini, salvati, testo);
   salvaStato(testo, ordini);
   const perProdotto = {};   // id -> { voce, qta, importo }
   const nonRiconosciuti = [];
   let incasso = 0;
 
+  const avvisiPrezzi = [];
   ordini.forEach(o => {
-    o.totale = 0;
+    let sommaRighe = 0;
     o.righe.forEach(r => {
       const v = trova(r.nome);
-      if (!v) { nonRiconosciuti.push(`${r.qta} x ${r.nome} (ordine di ${o.nome || "senza nome"})`); return; }
-      const importo = v.prezzo * r.qta;
-      o.totale += importo;
-      incasso += importo;
-      if (!perProdotto[v.id]) perProdotto[v.id] = { voce: v, qta: 0, importo: 0 };
-      perProdotto[v.id].qta += r.qta;
-      perProdotto[v.id].importo += importo;
+      const importo = r.importo !== null ? r.importo : v ? Math.round(v.prezzo * r.qta * 100) / 100 : 0;
+      sommaRighe += importo;
+      if (!v) nonRiconosciuti.push(`${r.qta} x ${r.nome} (ordine di ${o.nome || "senza nome"})`);
+      const unita = r.unita || (v && v.unita) || "porzione";
+      const k = JSON.stringify([r.nome, unita]);
+      if (!perProdotto[k]) perProdotto[k] = { voce: { nome: r.nome, unita }, qta: 0, importo: 0 };
+      perProdotto[k].qta += r.qta;
+      perProdotto[k].importo += importo;
     });
+    o.totale = o.totaleRicevuto !== null ? o.totaleRicevuto : sommaRighe;
+    incasso += o.totale;
+    if (o.righe.some(r => r.importo === null)) {
+      avvisiPrezzi.push(`${o.nome || "Senza nome"}: importi per prodotto stimati dal menu attuale.` +
+        (o.totaleRicevuto !== null ? " Il totale conserva quello del messaggio." : " Totale originale assente: anche il totale è stimato."));
+    }
   });
 
   const incassato = ordini.filter(o => o.stato.pagato).reduce((s, o) => s + o.totale, 0);
@@ -162,6 +202,7 @@ function calcola() {
 
     <section>
       <h2>Da preparare / da ordinare</h2>
+      ${avvisiPrezzi.length ? `<div class="avviso">${avvisiPrezzi.map(esc).join("<br>")}</div>` : ""}
       ${righeProdotti.length ? `
       <table>
         <thead><tr><th>Prodotto</th><th class="num">Quantità</th><th class="num">Importo</th></tr></thead>
@@ -179,6 +220,8 @@ function calcola() {
         <div class="ordine">
           <div class="testa"><span>${esc(o.nome || "Senza nome")}</span><span>${fmt(o.totale)}</span></div>
           <div>Ritiro: ${esc(o.ritiro || "non indicato")}</div>
+          ${o.cellulare ? `<div>Cellulare: ${esc(o.cellulare)}</div>` : ""}
+          ${o.note ? `<div style="white-space:pre-wrap"><b>Note:</b> ${esc(o.note)}</div>` : ""}
           <div class="spunte">
             <label><input type="checkbox" data-i="${i}" data-k="pagato" ${o.stato.pagato ? "checked" : ""}> Pagato</label>
             <label><input type="checkbox" data-i="${i}" data-k="ritirato" ${o.stato.ritirato ? "checked" : ""}> Ritirato</label>
@@ -204,9 +247,9 @@ function calcola() {
 const CHIAVE = "pm_somma_" + new Date().toISOString().slice(0, 10);
 function caricaStato() { try { return JSON.parse(localStorage.getItem(CHIAVE)) || {}; } catch (e) { return {}; } }
 function salvaStato(testo, ordini) {
-  const stato = {};
-  ordini.forEach((o, i) => { stato[i] = o.stato; });
-  try { localStorage.setItem(CHIAVE, JSON.stringify({ testo, stato })); } catch (e) {}
+  const stati = { ...(caricaStato().stati || {}) };
+  ordini.forEach(o => { stati[o.chiave] = o.stato; });
+  try { localStorage.setItem(CHIAVE, JSON.stringify({ testo, stati })); } catch (e) {}
 }
 
 $("calcola").addEventListener("click", calcola);
@@ -225,3 +268,4 @@ fetch(FILE_MENU, { cache: "no-store" })
 </script>
 </body>
 </html>
+
