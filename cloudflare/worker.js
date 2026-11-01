@@ -198,6 +198,13 @@ const money=n=>new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).
 const states={new:"Nuovo",confirmed:"Confermato",ready:"Pronto",collected:"Ritirato",cancelled:"Annullato"};
 $("day").value="";
 const formatDate=date=>new Date(date+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});
+function confirmationUrl(o){
+ let phone=String(o.customer_phone||"").replace(/[^0-9+]/g,"");
+ if(phone.startsWith("+"))phone=phone.slice(1);else if(phone.startsWith("00"))phone=phone.slice(2);else if(/^3[0-9]{9}$/.test(phone))phone="39"+phone;else return null;
+ if(!/^[1-9][0-9]{6,14}$/.test(phone))return null;
+ const text="Ciao "+o.customer_name+", il tuo ordine presso Pescheria da Massimo è confermato. Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time+". Codice ordine: "+o.id+". A presto!";
+ return "https://wa.me/"+phone+"?text="+encodeURIComponent(text);
+}
 function element(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
 async function api(path,options={}){
  const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},cache:"no-store"});
@@ -232,6 +239,24 @@ async function load(){
   for(const [value,title] of Object.entries(states)){const option=element("option",title);option.value=value;select.append(option);}select.value=o.status;card.append(select);
   async function change(body){paid.disabled=select.disabled=true;try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify(body)});}catch(e){$("msg").textContent=e.message;paid.checked=!!o.paid;select.value=o.status;paid.disabled=select.disabled=false;return;}await load();}
   paid.onchange=()=>change({paid:paid.checked});select.onchange=()=>change({status:select.value});
+  if(["new","confirmed"].includes(o.status)){
+   const wa=element("button",o.status==="new"?"Conferma su WhatsApp":"Invia conferma su WhatsApp");wa.type="button";
+   wa.onclick=async()=>{
+    const url=confirmationUrl(o);
+    if(!url){$("msg").textContent="Numero non valido: verifica il cellulare del cliente.";return;}
+    const chat=window.open("about:blank","_blank");if(chat)chat.opener=null;
+    wa.disabled=paid.disabled=select.disabled=true;
+    try{
+     await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify({status:"confirmed"})});
+     o.status="confirmed";select.value="confirmed";wa.textContent="Invia di nuovo la conferma";
+     const link=element("a","Apri il messaggio su WhatsApp");link.href=url;link.target="_blank";link.rel="noopener noreferrer";card.append(link);
+     if(chat)chat.location.replace(url);
+     $("msg").textContent="Ordine confermato nel pannello. Premi Invia su WhatsApp per avvisare il cliente. Se la chat non si apre, usa il link sotto l'ordine.";
+    }catch(e){if(chat)chat.close();$("msg").textContent=e.message;}
+    finally{wa.disabled=paid.disabled=select.disabled=false;}
+   };
+   card.append(wa,element("small","Il messaggio parte solo quando premi Invia in WhatsApp."));
+  }
   $("orders").append(card);
  }
  $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":($("view").value==="open"?"Nessun ordine da gestire":"Nessun ordine in archivio")+($("day").value?" per questa data.":".");
