@@ -56,14 +56,14 @@ editor.run(`aggiornaFesta(${fi},'scadenza_ora','99:99')`);assert.throws(()=>edit
 editor.run(`aggiornaFesta(${fi},'attiva',false)`);editor.run('validaFestivita()');
 assert.equal(client.run('categoriaAttiva({attiva:false,periodo:{dal:"2000-01-01",al:"2099-12-31"}})'),false);
 assert.equal(client.run('festaChiusa({scadenza_data:"2000-01-01",scadenza_ora:"18:00"})'),true);
-assert.match(client.run('festaIntro({ricorrenza:"<script>",presentazione:"<img>",ritiro_data:"2026-12-24"})'),/&lt;script&gt;/);
+assert.match(client.run('bannerFestivita({ricorrenza:"<script>",presentazione:"<img>",ritiro_data:"2026-12-24"})'),/&lt;script&gt;/);
 console.log('OK: festività riutilizzabili, bozze, date e scadenze, editor piatti e testi protetti.');
 
 // Holiday banner and products precede the ordinary menu. No edits to production menu data.
 client.run('menu='+JSON.stringify(menu)+';supportaFestivita=true;');
 client.run(`Object.assign(menu.categorie.find(c=>c.id==='natale'),{nome:'Menu di Natale',ricorrenza:'Natale',attiva:true,periodo:{dal:'2000-01-01',al:'2099-12-31'},ritiro_data:'2099-12-24',voci:[{id:'test-vongole',nome:'Vongole veraci',prezzo:18,unita:'kg',disponibile:true},{id:'test-baccala',nome:'Baccalà',prezzo:5,unita:'kg',disponibile:true}]});render()`);
-assert.match(client.node('bannerFesta').innerHTML,/Menu di Natale/);assert.match(client.node('bannerFesta').innerHTML,/href="#menu-festivita"/);
-const rendered=client.node('menu').innerHTML;assert.match(rendered,/Vongole veraci/);assert.match(rendered,/Baccalà/);assert.ok(rendered.indexOf('id="menu-festivita"')<rendered.indexOf('Spigola'));
+assert.match(client.node('bannerFesta').innerHTML,/Menu di Natale/);assert.doesNotMatch(client.node('bannerFesta').innerHTML,/Vedi i piatti della festa|href="#menu-festivita"/);
+const rendered=client.node('bannerFesta').innerHTML;assert.match(rendered,/Vongole veraci/);assert.match(rendered,/Baccalà/);assert.equal((rendered.match(/<h2>Menu di Natale<\/h2>/g)||[]).length,1);assert.doesNotMatch(client.node('menu').innerHTML,/Vongole veraci|Baccalà|Menu di Natale/);
 client.run("menu.categorie.find(c=>c.id==='natale').attiva=false;render()");assert.equal(client.node('bannerFesta').innerHTML,'');assert.doesNotMatch(client.node('menu').innerHTML,/Vongole veraci/);
 editor.run('messaggio("Modifiche salvate","ok")');assert.equal(editor.node('statoAlto').textContent,'Modifiche salvate');assert.equal(editor.node('statoBarra').textContent,'Modifiche salvate');assert.match(editor.node('statoAlto').className,/riscontro-alto/);
 assert.match(editor.run('statoFestivita({attiva:false,voci:[]})'),/Bozza/);
