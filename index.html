@@ -25,13 +25,6 @@
   .desc { font-size: 13px; color: var(--grigio); margin-top:3px; }
   .prezzo { font-weight:700; color: var(--blu); white-space:nowrap; font-size:15px; margin-top:4px; }
   .prezzo small { font-weight:400; color: var(--grigio); font-size: 12px; }
-  .card { flex-wrap:wrap; }
-  .scelte { flex-basis:100%; border-top:1px solid #eee;padding-top:10px; }
-  .pesi { display:flex;gap:8px;flex-wrap:wrap;margin:8px 0; }
-  .pesi button { padding:9px 13px;border:1px solid var(--blu);border-radius:8px;background:white;font:inherit;cursor:pointer; }
-  .pesi button[aria-pressed="true"] { background:var(--blu);color:white; }
-  .pesi button:disabled { opacity:.45;cursor:default; }
-  .scelte label { display:block;font-size:14px;margin:8px 0; }
   .controlli { display:flex; align-items:center; gap:6px; flex: none; }
   .btn { width:38px; height:38px; border-radius:50%; border:0; background: var(--blu); color:#fff; font-size:22px; line-height:1; cursor:pointer; }
   .btn:disabled { background:#c9c9c9; cursor:default; }
@@ -64,6 +57,8 @@
   .carta-dati { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; margin: 12px 0; }
   .carta-dati dt { color: var(--grigio); }
   .carta-dati dd { margin: 0; font-weight: 600; }
+  .badge-fresco { display:inline-block; background:#1e8e3e; color:#fff; font-size:12px; padding:3px 8px; border-radius:999px; vertical-align:middle; margin-left:6px; }
+  .avvertenza { color:#8a1c12; font-size:13px; font-weight:700; margin: 8px 0; }
   .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
   .consiglio p { margin: 4px 0 0; }
   .azioni-carta { display: flex; gap: 10px; margin-top: 14px; }
@@ -88,7 +83,6 @@
 
 <main>
   <div id="errore"></div>
-  <p id="avvisoMenu" class="come" hidden></p>
   <div id="oggi"></div>
   <div id="menu"></div>
 
@@ -99,11 +93,11 @@
     <label for="ora">Orario</label>
     <select id="ora"></select>
     <label for="nome">Il tuo nome</label>
-    <input id="nome" maxlength="100" type="text" placeholder="Es. Rossi" autocomplete="name">
-    <label for="cellulare">Il tuo cellulare</label>
-    <input id="cellulare" maxlength="30" type="tel" inputmode="tel" placeholder="Es. 333 1234567" autocomplete="tel">
+    <input id="nome" type="text" placeholder="Es. Rossi" autocomplete="name">
+    <label for="cellulare">Il tuo cellulare (facoltativo)</label>
+    <input id="cellulare" type="tel" inputmode="tel" placeholder="Es. 333 1234567" autocomplete="tel">
     <label for="note">Note (facoltative)</label>
-    <textarea maxlength="2000" id="note" placeholder="Es. pulire il pesce, taglio a tranci..."></textarea>
+    <textarea id="note" placeholder="Es. pulire il pesce, taglio a tranci..."></textarea>
   </div>
 
   <h2>Come funziona</h2>
@@ -111,7 +105,7 @@
     <ol>
       <li>Scegli i prodotti e le quantità.</li>
       <li>Scegli giorno e orario di ritiro.</li>
-      <li>Controlla il riepilogo e premi Invia ordine. L’ordine resta in attesa di conferma della pescheria.</li>
+      <li>Invia l'ordine su WhatsApp: ti rispondiamo per confermare.</li>
       <li>Ritiri in pescheria e paghi al banco.</li>
     </ol>
   </div>
@@ -128,11 +122,8 @@
   <div class="foglio">
     <h3>Riepilogo ordine</h3>
     <div class="riepilogo" id="testo"></div>
-    <p id="invioStato" role="status" aria-live="polite">Collegamento ordini in corso…</p>
-    <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Lascia vuoto<input id="website" tabindex="-1" autocomplete="off"></label></div>
-    <div class="azioni"><button class="wa" id="inviaOrdine" disabled>Invia ordine</button><button class="copia" id="nuovoOrdine" hidden>Nuovo ordine</button></div>
     <div class="azioni">
-      <a class="wa" id="linkWa" href="#" target="_blank" rel="noopener">Solo WhatsApp (non archiviato)</a>
+      <a class="wa" id="linkWa" href="#" target="_blank" rel="noopener">Invia su WhatsApp</a>
       <button class="copia" id="copia">Copia</button>
     </div>
     <button class="chiudi" id="chiudi">Chiudi</button>
@@ -150,25 +141,18 @@ const GIORNO_CHIUSO = 1;                // 0 = domenica, 1 = lunedì (chiuso)
 const ORARI = ["09:00","09:30","10:00","10:30","11:00","11:30","12:00","17:00","17:30","18:00","18:30","19:00"];
 const ORARI_SERA = ["18:30","19:00","19:30","20:00"]; // ritiro serale per la frittura (riserva)
 
-const API_ORDINI = "https://pescheria-massimo-api.ermestrerm.workers.dev";
-let supportaPreparazioni=false;
-let apiPronta=false, invioInCorso=false, riepilogoInviato=false;
 // ---- STATO ----
 let menu = null;
 const carrello = {}; // id -> { voce, qta }
-let ultimoOrdine = { firma: "", codice: "" };
 
 const fmt = n => n.toFixed(2).replace(".", ",") + " €";
 const tutte = () => menu.categorie.flatMap(c => c.voci);
 
 const fmtQ = n => String(n).replace(".", ",");
-const quantita = (v,q) => v.unita==="kg" ? (q<1?Math.round(q*1000)+" g":fmtQ(q)+" kg") : v.unita==="etto" ? Math.round(q*100)+" g" : q+" "+(q===1?"porzione":"porzioni");
-const nonOrdinabile = v => !v.disponibile || ["esaurito","terminato"].includes(v.stato);
-const escapa = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+const escapa = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 // Riga di tracciabilità: compare solo per i campi compilati
 function traccia(v) {
   const p = [];
-  if (v.stato_prodotto) p.push(escapa(v.stato_prodotto));
   if (v.nome_scientifico) p.push(`<i>${escapa(v.nome_scientifico)}</i>`);
   if (v.zona_fao) p.push(`Zona FAO ${escapa(v.zona_fao)}`);
   if (v.metodo) p.push(escapa(v.metodo));
@@ -181,39 +165,24 @@ function traccia(v) {
 
 function cardHtml(v) {
   const q = carrello[v.id] ? carrello[v.id].qta : 0;
-  const esaurito = nonOrdinabile(v);
+  const esaurito = v.stato === "esaurito";
   const unita = v.unita ? ` <small>/ ${v.unita}</small>` : "";
   const foto = v.foto ? `<img src="${v.foto}" alt="${v.nome}" loading="lazy" onclick="apriCarta('${v.id}')" style="cursor:zoom-in">` : "";
   return `<div class="card${esaurito ? " esaurito" : ""}">
     ${foto}
     <div class="info">
-      <div class="nome"><span class="apri-carta" onclick="apriCarta('${v.id}')">${escapa(v.nome)}</span>${esaurito ? ' <span class="tag-esaurito">ESAURITO</span>' : ""}</div>
-      <div class="desc">${escapa(v.descrizione || "")}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}${v.porzione ? ` · Porzione: ${v.porzione}` : ""}</div>
+      <div class="nome"><span class="apri-carta" onclick="apriCarta('${v.id}')">${v.nome}</span>${esaurito ? ' <span class="tag-esaurito">ESAURITO</span>' : ""}</div>
+      <div class="desc">${v.descrizione || ""}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}${v.porzione ? ` · Porzione: ${v.porzione}` : ""}</div>
       <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
       ${traccia(v)}
     </div>
     <div class="controlli">
       <button class="btn" onclick="cambia('${v.id}',-1)" ${q === 0 ? "disabled" : ""} aria-label="Togli">−</button>
-      <span class="qta">${quantita(v,q)}</span>
+      <span class="qta">${fmtQ(q)}</span>
       <button class="btn piu" onclick="cambia('${v.id}',1)" ${esaurito ? "disabled" : ""} aria-label="Aggiungi">+</button>
     </div>
-    ${scelteVoce(v,q)}
   </div>`;
 }
-
-
-function scelteVoce(v,q){
- const off=nonOrdinabile(v), opzioni=v.preparazioni?.length ? [...new Set([...v.preparazioni,"Pulito","Sfilettato"])] : [],prep=carrello[v.id]?.preparazione||opzioni[0]||"";
- return `<div class="scelte">
- ${v.foto_didascalia?`<small>${escapa(v.foto_didascalia)}</small>`:""}
- ${v.unita==="kg"?`<div class="pesi" aria-label="Scegli peso">${[.5,1,1.5].map(n=>`<button onclick="scegliPeso('${v.id}',${n})" ${off?"disabled":""} aria-pressed="${q===n}">${quantita(v,n)}</button>`).join("")}</div>`:""}
- ${q>0?`<div><b>${quantita(v,q)} · ${fmt(Math.round(Math.round(v.prezzo*100)*q)/100)}</b></div>`:""}
- ${opzioni.length?`<label>Preparazione <select ${off?"disabled":""} onchange="scegliPreparazione('${v.id}',this.value)">${opzioni.map(x=>`<option ${x===prep?"selected":""}>${escapa(x)}</option>`).join("")}</select></label><small>Peso e totale indicativi; peso finale e importo da confermare al banco.</small>`:""}
- ${v.consiglio?`<p class="consiglio"><b>Il consiglio di Massimo:</b> ${escapa(v.consiglio)}</p>`:""}
- </div>`;
-}
-function scegliPeso(id,q){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce))return;carrello[id]={voce,qta:q,preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||""};aggiornaOrari();render();}
-function scegliPreparazione(id,value){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||![...new Set([...(voce.preparazioni||[]),"Pulito","Sfilettato"])].includes(value))return;if(!carrello[id])carrello[id]={voce,qta:voce.unita==="kg"?.5:1};carrello[id].preparazione=value;aggiornaOrari();render();}
 
 // Una categoria con periodo compare solo nelle date impostate; senza date resta nascosta
 function categoriaAttiva(c) {
@@ -224,14 +193,13 @@ function categoriaAttiva(c) {
 }
 
 function render() {
-  const avviso=document.getElementById("avvisoMenu");avviso.textContent=menu.nota||"";avviso.hidden=!menu.nota;
-  const inEvidenza = tutte().find(v => v.in_evidenza && !nonOrdinabile(v));
+  const inEvidenza = tutte().find(v => v.in_evidenza && v.disponibile);
   document.getElementById("oggi").innerHTML = inEvidenza ? `
     <h2>Pesce di oggi</h2>
     <div class="oggi">
       <img src="${inEvidenza.foto}" alt="${inEvidenza.nome}" onclick="apriCarta('${inEvidenza.id}')" style="cursor:zoom-in">
       <div class="corpo">
-        <span class="etichetta">In evidenza</span>
+        <span class="etichetta">Arrivato oggi</span>
         ${cardHtml(inEvidenza).replace(/<img[^>]*>/, "")}
       </div>
     </div>` : "";
@@ -244,13 +212,12 @@ function render() {
 
 function cambia(id, delta) {
   const voce = tutte().find(v => v.id === id);
-  if (!voce || (delta > 0 && (!voce.disponibile || voce.stato === "esaurito" || voce.stato === "terminato"))) return;
   const attuale = carrello[id] ? carrello[id].qta : 0;
   // kg: mezzo chilo per tocco; etto: un etto per tocco
   const passo = voce.unita === "kg" ? 0.5 : 1;
   const nuova = Math.max(0, Math.round((attuale + delta * passo) * 100) / 100);
   if (nuova === 0) delete carrello[id];
-  else carrello[id] = { voce, qta: nuova, preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||"" };
+  else carrello[id] = { voce, qta: nuova };
   aggiornaOrari();
   render();
 }
@@ -267,7 +234,7 @@ function aggiornaOrari() {
 }
 
 function totale() {
-  return Object.values(carrello).reduce((s, r) => s + Math.round(Math.round(r.voce.prezzo * 100) * r.qta), 0) / 100;
+  return Object.values(carrello).reduce((s, r) => s + r.voce.prezzo * r.qta, 0);
 }
 
 function aggiornaTotali() {
@@ -285,9 +252,9 @@ function riempiRitiro() {
     const d = new Date(oggi); d.setDate(oggi.getDate() + i);
     if (d.getDay() === GIORNO_CHIUSO) continue;
     const nome = d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
-    giorni.push({date:d.toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"}),label:nome.charAt(0).toUpperCase() + nome.slice(1)});
+    giorni.push(nome.charAt(0).toUpperCase() + nome.slice(1));
   }
-  document.getElementById("giorno").innerHTML = giorni.map(g => `<option value="${g.date}">${g.label}</option>`).join("");
+  document.getElementById("giorno").innerHTML = giorni.map(g => `<option>${g}</option>`).join("");
   document.getElementById("ora").innerHTML = ORARI.map(o => `<option>${o}</option>`).join("");
 }
 
@@ -297,86 +264,28 @@ function testoOrdine() {
     const u = r.voce.unita ? ` (${r.voce.unita})` : "";
     // Peso esplicito: il cliente e Massimo leggono subito quanti grammi o chili
     const peso = r.voce.unita === "kg" ? `${fmtQ(r.qta)} kg` : r.voce.unita === "etto" ? `${Math.round(r.qta * 100)} g` : "";
-    return `- ${fmtQ(r.qta)} x ${r.voce.nome}${r.preparazione?" ["+r.preparazione+"]":""}${u}${peso ? ` = ${peso}` : ""} · ${fmt(r.voce.prezzo)}${r.voce.unita ? "/" + r.voce.unita : "/porzione"} · ${fmt(r.voce.prezzo * r.qta)}`;
+    return `- ${fmtQ(r.qta)} x ${r.voce.nome}${u}${peso ? ` = ${peso}` : ""}`;
   });
   const nome = document.getElementById("nome").value.trim() || "(senza nome)";
   const cell = document.getElementById("cellulare").value.replace(/\s+/g, "");
-  const selGiorno = document.getElementById("giorno");
-  const giorno = selGiorno.selectedOptions?.[0]?.textContent || selGiorno.value;
+  const giorno = document.getElementById("giorno").value;
   const ora = document.getElementById("ora").value;
   const note = document.getElementById("note").value.trim();
   let t = `Ordine Pescheria da Massimo\nNome: ${nome}${cell ? `\nCellulare: ${cell}` : ""}\nRitiro: ${giorno} alle ${ora}\n\n${righe.join("\n")}\n\nTotale indicativo: ${fmt(totale())}`;
   if (note) t += `\n\nNote: ${note}`;
-  if (ultimoOrdine.firma !== t) {
-    ultimoOrdine = { firma: t, codice: crypto.randomUUID() };
-  }
-  return t.replace("Ordine Pescheria da Massimo\n", `Ordine Pescheria da Massimo\nCodice ordine: ${ultimoOrdine.codice}\n`);
+  return t;
 }
 
 document.getElementById("ordina").addEventListener("click", () => {
-  riepilogoInviato=false;
-  document.getElementById("inviaOrdine").disabled=!apiPronta;
-  document.getElementById("inviaOrdine").hidden=false;
-  document.getElementById("nuovoOrdine").hidden=true;
-  document.getElementById("invioStato").textContent=apiPronta?"Controlla i dati. L’ordine sarà registrato premendo Invia ordine.":"Invio automatico non disponibile. Puoi contattare la pescheria su WhatsApp.";
   const t = testoOrdine();
   document.getElementById("testo").textContent = t;
   document.getElementById("linkWa").href = `https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(t)}`;
   document.getElementById("modale").classList.add("aperta");
 });
-document.getElementById("chiudi").addEventListener("click", () => {if(!invioInCorso)document.getElementById("modale").classList.remove("aperta");});
+document.getElementById("chiudi").addEventListener("click", () => document.getElementById("modale").classList.remove("aperta"));
 document.getElementById("copia").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(testoOrdine()); document.getElementById("copia").textContent = "Copiato"; }
   catch (e) { document.getElementById("copia").textContent = "Seleziona e copia"; }
-});
-
-
-// Salvataggio centrale. Nessuna chiave amministratore è presente nel sito clienti.
-async function collegaOrdini(){
- try{
-  const response=await fetch(API_ORDINI+"/api/config",{cache:"no-store",signal:AbortSignal.timeout(15000)});
-  const config=await response.json();
-  if(!response.ok || !config.ok)throw new Error(config.errore||"Servizio non disponibile");
-  menu=config.menu;supportaPreparazioni=config.preparations_supported===true;
-  const sel=document.getElementById("giorno"),previous=sel.value;
-  sel.replaceChildren();
-  for(const date of config.days){const opt=document.createElement("option");opt.value=date;opt.textContent=new Date(date+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});sel.append(opt);}
-  if(config.days.includes(previous))sel.value=previous;
-  apiPronta=true;aggiornaOrari();render();
-  document.getElementById("invioStato").textContent="Invio automatico disponibile.";
-  document.getElementById("inviaOrdine").disabled=false;
-  document.getElementById("linkWa").textContent="WhatsApp (facoltativo)";
- }catch(e){
-  apiPronta=false;
-  document.getElementById("invioStato").textContent="Invio automatico non disponibile. Gli ordini inviati solo su WhatsApp non vengono archiviati automaticamente.";
- }
-}
-document.getElementById("inviaOrdine").addEventListener("click",async()=>{
- if(invioInCorso || riepilogoInviato || !apiPronta)return;
- const status=document.getElementById("invioStato"),button=document.getElementById("inviaOrdine");
- const name=document.getElementById("nome").value.trim(),phone=document.getElementById("cellulare").value.replace(/\s/g,"");
- if(!name || !/^\+?[0-9]{6,15}$/.test(phone)){status.textContent="Inserisci nome e un numero di cellulare valido prima di inviare.";return;}
- testoOrdine();
- const body={id:ultimoOrdine.codice,customer_name:name,customer_phone:phone,pickup_date:document.getElementById("giorno").value,pickup_time:document.getElementById("ora").value,notes:[document.getElementById("note").value.trim(),!supportaPreparazioni?Object.values(carrello).filter(r=>r.preparazione).map(r=>r.voce.nome+": "+r.preparazione).join("; "):""].filter(Boolean).join("\n"),items:Object.values(carrello).map(r=>({id:r.voce.id,quantity:r.qta,...(supportaPreparazioni?{preparation:r.preparazione||""}:{})})).sort((a,b)=>a.id.localeCompare(b.id)),expected_total_cents:Object.values(carrello).reduce((sum,r)=>sum+Math.round(Math.round(r.voce.prezzo*100)*r.qta),0),website:document.getElementById("website").value};
- invioInCorso=true;button.disabled=true;document.getElementById("chiudi").disabled=true;status.textContent="Invio in corso…";
- try{
-  const identity=JSON.stringify({...body,id:undefined});
-  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(identity));
-  const signature=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,"0")).join("");
-  try{const saved=JSON.parse(sessionStorage.getItem("pm_online_attempt")||"null");if(saved?.signature===signature)body.id=saved.id;sessionStorage.setItem("pm_online_attempt",JSON.stringify({signature,id:body.id}));}catch{}
-  ultimoOrdine.codice=body.id;
-  const response=await fetch(API_ORDINI+"/api/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
-  const data=await response.json();
-  if(!response.ok || !data.ok)throw new Error(data.errore||"Ordine non registrato");
-  riepilogoInviato=true;button.hidden=true;document.getElementById("nuovoOrdine").hidden=false;
-  status.textContent="Ordine ricevuto! Codice: "+data.id+". Totale indicativo: "+fmt(data.total_cents/100)+". In attesa di conferma della pescheria. Non occorre inviarlo anche su WhatsApp.";
-  const text=testoOrdine();document.getElementById("testo").textContent=text;document.getElementById("linkWa").href=`https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(text)}`;
- }catch(e){status.textContent=(e.name==="TimeoutError"||e.name==="TypeError")?"Non abbiamo ricevuto la conferma. Premi di nuovo Invia ordine senza modificare i dati: lo stesso codice evita duplicati.":e.message;button.disabled=false;}
- finally{invioInCorso=false;document.getElementById("chiudi").disabled=false;}
-});
-document.getElementById("nuovoOrdine").addEventListener("click",()=>{
- try{sessionStorage.removeItem("pm_online_attempt");}catch{}
- ultimoOrdine={firma:"",codice:""};for(const id of Object.keys(carrello))delete carrello[id];riepilogoInviato=false;document.getElementById("modale").classList.remove("aperta");aggiornaOrari();render();
 });
 
 // ---- CARTA DEL PESCE ----
@@ -385,23 +294,27 @@ function apriCarta(id) {
   const v = tutte().find(x => x.id === id);
   if (!v) return;
   const righe = [];
-  if (v.stato_prodotto) righe.push(["Stato del prodotto",escapa(v.stato_prodotto)]);
   if (v.nome_scientifico) righe.push(["Nome scientifico", `<i>${escapa(v.nome_scientifico)}</i>`]);
   if (v.zona_fao) righe.push([v.metodo && /allev/i.test(v.metodo) ? "Paese di allevamento" : "Zona di pesca (FAO)", escapa(v.zona_fao)]);
   if (v.metodo) righe.push(["Metodo", escapa(v.metodo)]);
   if (v.attrezzo) righe.push(["Pescato con", escapa(v.attrezzo)]);
   if (v.provenienza) righe.push(["Dal mercato", escapa(v.provenienza)]);
   if (v.data_arrivo || v.ora_arrivo) righe.push(["Arrivato", escapa([v.data_arrivo, v.ora_arrivo ? "alle " + v.ora_arrivo : ""].filter(Boolean).join(" "))]);
+  const etichetteCondizione = { fresco: "Fresco", congelato: "Congelato", surgelato: "Surgelato", decongelato: "Decongelato" };
+  if (v.condizione) righe.push(["Condizione", etichetteCondizione[v.condizione] || escapa(v.condizione)]);
+  if (v.condizione === "congelato" && v.glassatura) righe.push(["Glassatura", escapa(v.glassatura) + "% (tara)"]);
+  if (v.data_congelamento) righe.push(["Congelato il", escapa(v.data_congelamento)]);
   if (v.allergeni) righe.push(["Allergeni", escapa(v.allergeni)]);
-  const consiglio = v.consiglio ? `<div class="consiglio"><b>Il consiglio di Massimo</b><p>${escapa(v.consiglio)}</p></div>` : "";
+  const avvertenza = v.condizione === "decongelato" ? `<p class="avvertenza">Pesce decongelato: da consumarsi entro 24 ore e da non ricongelare.</p>` : "";
+  const consiglio = v.consiglio ? `<div class="consiglio"><b>Il consiglio di Massimo</b><p>${escapa(v.consiglio).replace(/\n/g, "<br>")}</p></div>` : "";
   document.getElementById("cartaCorpo").innerHTML = `
     ${v.foto ? `<img class="carta-foto" src="${v.foto}" alt="${escapa(v.nome)}">` : ""}
-    <h3>${escapa(v.nome)}</h3>
+    <h3>${escapa(v.nome)} ${v.condizione === "fresco" ? `<span class="badge-fresco">Fresco</span>` : ""}</h3>
     ${righe.length ? `<dl class="carta-dati">${righe.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>` : ""}
-    ${v.foto_didascalia?`<small>${escapa(v.foto_didascalia)}</small>`:""}
+    ${avvertenza}
     ${consiglio}
     <div class="azioni-carta">
-      <button class="principale-carta" onclick="aggiungiDaCarta('${v.id}')" ${!v.disponibile || v.stato === "esaurito" || v.stato === "terminato" ? "disabled" : ""}>${v.stato === "esaurito" ? "Esaurito" : "Aggiungi all'ordine"}</button>
+      <button class="principale-carta" onclick="aggiungiDaCarta('${v.id}')">Aggiungi all'ordine</button>
       <button class="chiudi-carta" onclick="chiudiCarta()">Chiudi</button>
     </div>`;
   document.getElementById("carta").classList.add("aperta");
@@ -426,7 +339,6 @@ fetch("menu.json", { cache: "no-store" })
     aggiornaOrari();
     if (menu.ritiro && menu.ritiro.ordini_entro) document.getElementById("entro").textContent = menu.ritiro.ordini_entro;
     render();
-    collegaOrdini();
   })
   .catch(() => {
     document.getElementById("errore").innerHTML = `<div class="errore">Il menu non si è caricato. Riprova tra poco.</div>`;
@@ -434,4 +346,3 @@ fetch("menu.json", { cache: "no-store" })
 </script>
 </body>
 </html>
-
