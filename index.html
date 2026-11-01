@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="banner-festivita-20261101">
+<meta name="pm-release" content="festivita-compatta-20261101">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pescheria da Massimo</title>
 <style>
@@ -238,23 +238,19 @@ function categoriaAttiva(c) {
   return oggi >= c.periodo.dal && oggi <= c.periodo.al;
 }
 
-function festaIntro(c){
- const data=d=>new Date(d+'T12:00:00Z').toLocaleDateString('it-IT',{timeZone:'Europe/Rome',day:'numeric',month:'long',year:'numeric'});
- return `<div class="oggi" style="padding:16px;display:block;border:2px solid #d5a74c"><strong>${escapa(c.ricorrenza||'Festività')}</strong>${!supportaFestivita?'<p><b>Prenotazioni della festività in preparazione.</b></p>':''}${festaChiusa(c)?'<p><b>Prenotazioni chiuse per questa ricorrenza.</b></p>':''}${c.presentazione?`<p style="white-space:pre-wrap">${escapa(c.presentazione)}</p>`:''}${c.ritiro_data?`<p>Ritiro: <b>${escapa(data(c.ritiro_data))}</b>. Scegli questa data prima di inviare l'ordine.</p>`:''}${c.scadenza_data?`<p>Prenotazioni entro il ${escapa(data(c.scadenza_data))} alle ${escapa(c.scadenza_ora)}.</p>`:''}<p>Scegli i piatti e le quantità qui sotto. L'ordine attende la conferma della pescheria.</p></div>`;
-}
 function bannerFestivita(c){
  const colori={Natale:['#174b39','🎄'],Capodanno:['#222744','✨'],Pasqua:['#4b5366','🌿'],Ferragosto:['#075e71','☀️']};
- const [colore,simbolo]=colori[c.ricorrenza]||['#203a59','🐟'];
- const n=c.voci.filter(v=>v.disponibile&&v.stato!=='terminato').length;
- const ritiro=c.ritiro_data?new Date(c.ritiro_data+'T12:00:00Z').toLocaleDateString('it-IT',{timeZone:'Europe/Rome',day:'numeric',month:'long',year:'numeric'}):'';
- return `<aside class="banner-festa" style="background:${colore}" aria-label="Menu della festività"><span class="ricorrenza">${simbolo} ${escapa(c.ricorrenza||'Festività')}</span><h2>${escapa(c.nome)}</h2>${ritiro?`<p>Ritiro ${escapa(ritiro)}</p>`:''}<p>${festaChiusa(c)?'Prenotazioni chiuse':n?'Le proposte di Massimo per questa festa.':'Menu in preparazione.'}</p>${n?'<a href="#menu-festivita">Vedi i piatti della festa ↓</a>':''}</aside>`;
+ const [colore,simbolo]=Object.hasOwn(colori,c.ricorrenza)?colori[c.ricorrenza]:['#203a59','🐟'];
+ const n=(c.voci||[]).filter(v=>v.disponibile&&v.stato!=='terminato').length;
+ const data=d=>new Date(d+'T12:00:00Z').toLocaleDateString('it-IT',{timeZone:'Europe/Rome',day:'numeric',month:'long',year:'numeric'});
+ return `<header class="banner-festa" style="background:${colore}" aria-label="Menu della festività"><span class="ricorrenza">${simbolo} ${escapa(c.ricorrenza||'Festività')}</span><h2>${escapa(c.nome)}</h2>${c.presentazione?`<p style="white-space:pre-wrap">${escapa(c.presentazione)}</p>`:''}${c.ritiro_data?`<p>Ritiro: <b>${escapa(data(c.ritiro_data))}</b></p>`:''}${c.scadenza_data?`<p>Prenotazioni entro il ${escapa(data(c.scadenza_data))} alle ${escapa(c.scadenza_ora)}.</p>`:''}${festaChiusa(c)?'<p><b>Prenotazioni chiuse</b></p>':!supportaFestivita?'<p>Prenotazioni della festività in preparazione.</p>':!n?'<p>Menu in preparazione.</p>':''}</header>`;
 }
 
 function render() {
   const avviso=document.getElementById("avvisoMenu");avviso.textContent=menu.nota||"";avviso.hidden=!menu.nota;
   const festa=menu.categorie.find(c=>c.id==="natale"&&categoriaAttiva(c));
-  document.getElementById("bannerFesta").innerHTML=festa?bannerFestivita(festa):"";
-  const inEvidenza = tutte().find(v => v.in_evidenza && !nonOrdinabile(v));
+  document.getElementById("bannerFesta").innerHTML=festa?'<section id="menu-festivita">'+bannerFestivita(festa)+festa.voci.filter(v=>v.disponibile&&v.stato!=="terminato").map(cardHtml).join("")+"</section>":"";
+  const inEvidenza = tutte().find(v => v.in_evidenza && !festa?.voci.some(x=>x.id===v.id) && !nonOrdinabile(v));
   document.getElementById("oggi").innerHTML = inEvidenza ? `
     <h2>Pesce di oggi</h2>
     <div class="oggi">
@@ -265,8 +261,8 @@ function render() {
       </div>
     </div>` : "";
 
-  document.getElementById("menu").innerHTML = menu.categorie.filter(categoriaAttiva).sort((a,b)=>(b.id==="natale")-(a.id==="natale")).map(c =>
-    `<section ${c.id==="natale"?'id="menu-festivita"':""}><h2>${escapa(c.nome)}</h2>${c.id==="natale"?festaIntro(c):""}${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")+"</section>"
+  document.getElementById("menu").innerHTML = menu.categorie.filter(c=>c.id!=="natale"&&categoriaAttiva(c)).map(c =>
+    `<section><h2>${escapa(c.nome)}</h2>${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")+"</section>"
   ).join("");
   aggiornaTotali();
   if(cartaApertaId)apriCarta(cartaApertaId);
