@@ -60,3 +60,15 @@ Provenienza, metodo, zona FAO, attrezzo, stato fresco/decongelato/congelato e co
 Il QR statico img/qr-menu.svg apre https://ermestre.github.io/pescheriamassimo/ e si trova nella pagina di gestione. È un QR del menu, non un codice lotto o una certificazione.
 
 Verifiche aggiuntive: node tests/menu.test.cjs. Le verifiche automatiche non sostituiscono una prova visiva e di invio sui servizi pubblicati.
+
+## Schede prodotto e archivio arrivi
+
+La foto è un pulsante accessibile; Scheda e provenienza apre la stessa scheda con quantità, preparazione, prezzo, lotto del fornitore, specie, paese, zona FAO, metodo, attrezzo, arrivo, data pesca documentata, stato del prodotto e consiglio multilinea. I campi vuoti restano nascosti. Confermare una quantità scelta nella scheda non la aggiunge una seconda volta.
+
+Tutti i prodotti esistenti della categoria pesce fresco hanno una preparazione configurata, coerente con il nome attuale: Intero per gamberi/bianchetti, Già sgusciato per gamberetti già sgusciati, A tranci per tonno/spada. Pulizia, sfilettatura e altri servizi rimangono configurabili per prodotto dal gestore; i prodotti già pronti non ricevono lavorazioni arbitrarie. La disponibilità del pesce spada resta invariata.
+
+Nella gestione, lotto_fornitore è il codice originale; paese_origine e data_pesca sono facoltativi. Non ci sono interrogazioni automatiche a registri o certificazioni. Il lotto corrente viene copiato nelle note dei nuovi ordini e nel testo WhatsApp, mantenendo lo storico dell'ordine quando il menu cambia. Nessun aggiornamento del Worker richiesto per queste note.
+
+Al salvataggio, registraArrivi conserva in archivio_arrivi una fotografia dei soli campi pubblici di provenienza del prodotto quando esiste un lotto. Salvataggi identici non duplicano le copie; un lotto nuovo o una correzione genera una nuova copia. L'archivio è conservato nel menu.json pubblico su GitHub, consultabile in gestione come sola lettura: non inserire fatture o dati personali. Non è un registro privato né sostituisce la documentazione del fornitore. Un prodotto con lotto/storico può essere nascosto con Terminato e non viene eliminato dalla UI.
+
+Questa versione gestisce un lotto corrente per voce di menu. Per esporre contemporaneamente partite differenti della stessa specie occorrono voci distinte; non viene dedotto il lotto effettivamente consegnato al banco. I dati inseriti nell'ordine descrivono il lotto mostrato al momento della prenotazione.

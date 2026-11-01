@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="menu-restored-20261101">
+<meta name="pm-release" content="schede-pesce-20261101">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pescheria da Massimo</title>
 <style>
@@ -66,7 +66,11 @@
   .carta-dati dt { color: var(--grigio); }
   .carta-dati dd { margin: 0; font-weight: 600; }
   .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
-  .consiglio p { margin: 4px 0 0; }
+  .consiglio p { margin: 4px 0 0; white-space:pre-wrap; }
+  .scheda-link { background:transparent; border:1px solid var(--blu); border-radius:8px; padding:8px 10px; margin-top:8px; font:inherit; color:var(--blu); cursor:pointer; }
+  .foto-pulsante { background:none;border:0;padding:0;cursor:zoom-in;flex:none; }
+  .foto-pulsante img { display:block; }
+  .carta-dati dd { overflow-wrap:anywhere; }
   .azioni-carta { display: flex; gap: 10px; margin-top: 14px; }
   .principale-carta { flex: 2; background: var(--oro); color: #222; border: 0; border-radius: 10px; padding: 13px; font-weight: 700; font-size: 16px; cursor: pointer; }
   .chiudi-carta { flex: 1; background: #e8e8e8; color: #222; border: 0; border-radius: 10px; padding: 13px; font-size: 15px; cursor: pointer; }
@@ -156,6 +160,7 @@ let supportaPreparazioni=false;
 let apiPronta=false, invioInCorso=false, riepilogoInviato=false;
 // ---- STATO ----
 let menu = null;
+let cartaApertaId = null;
 const carrello = {}; // id -> { voce, qta }
 let ultimoOrdine = { firma: "", codice: "" };
 
@@ -184,7 +189,7 @@ function cardHtml(v) {
   const q = carrello[v.id] ? carrello[v.id].qta : 0;
   const esaurito = nonOrdinabile(v);
   const unita = v.unita ? ` <small>/ ${v.unita}</small>` : "";
-  const foto = v.foto ? `<img src="${v.foto}" alt="${v.nome}" loading="lazy" onclick="apriCarta('${v.id}')" style="cursor:zoom-in">` : "";
+  const foto = v.foto ? `<button class="foto-pulsante" onclick="apriCarta('${v.id}')" aria-label="Apri la scheda di ${escapa(v.nome)}"><img src="${escapa(v.foto)}" alt="${escapa(v.nome)}" loading="lazy"></button>` : "";
   return `<div class="card${esaurito ? " esaurito" : ""}">
     ${foto}
     <div class="info">
@@ -192,6 +197,7 @@ function cardHtml(v) {
       <div class="desc">${escapa(v.descrizione || "")}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}${v.porzione ? ` · Porzione: ${v.porzione}` : ""}</div>
       <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
       ${traccia(v)}
+      <button class="scheda-link" onclick="apriCarta('${v.id}')">Scheda e provenienza</button>
     </div>
     <div class="controlli">
       <button class="btn" onclick="cambia('${v.id}',-1)" ${q === 0 ? "disabled" : ""} aria-label="Togli">−</button>
@@ -233,7 +239,7 @@ function render() {
       <img src="${inEvidenza.foto}" alt="${inEvidenza.nome}" onclick="apriCarta('${inEvidenza.id}')" style="cursor:zoom-in">
       <div class="corpo">
         <span class="etichetta">In evidenza</span>
-        ${cardHtml(inEvidenza).replace(/<img[^>]*>/, "")}
+        ${cardHtml(inEvidenza).replace(/<button class="foto-pulsante"[\s\S]*?<\/button>/, "")}
       </div>
     </div>` : "";
 
@@ -241,6 +247,7 @@ function render() {
     `<h2>${c.nome}</h2>${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")
   ).join("");
   aggiornaTotali();
+  if(cartaApertaId)apriCarta(cartaApertaId);
 }
 
 function cambia(id, delta) {
@@ -307,7 +314,8 @@ function testoOrdine() {
   const ora = document.getElementById("ora").value;
   const note = document.getElementById("note").value.trim();
   let t = `Ordine Pescheria da Massimo\nNome: ${nome}${cell ? `\nCellulare: ${cell}` : ""}\nRitiro: ${giorno} alle ${ora}\n\n${righe.join("\n")}\n\nTotale indicativo: ${fmt(totale())}`;
-  if (note) t += `\n\nNote: ${note}`;
+  const lotti=Object.values(carrello).filter(r=>r.voce.lotto_fornitore).map(r=>"Lotto "+r.voce.nome+": "+r.voce.lotto_fornitore).join("; ");
+  if (note||lotti) t += `\n\nNote: ${[note,lotti].filter(Boolean).join("\n")}`;
   if (ultimoOrdine.firma !== t) {
     ultimoOrdine = { firma: t, codice: crypto.randomUUID() };
   }
@@ -358,7 +366,7 @@ document.getElementById("inviaOrdine").addEventListener("click",async()=>{
  const name=document.getElementById("nome").value.trim(),phone=document.getElementById("cellulare").value.replace(/\s/g,"");
  if(!name || !/^\+?[0-9]{6,15}$/.test(phone)){status.textContent="Inserisci nome e un numero di cellulare valido prima di inviare.";return;}
  testoOrdine();
- const body={id:ultimoOrdine.codice,customer_name:name,customer_phone:phone,pickup_date:document.getElementById("giorno").value,pickup_time:document.getElementById("ora").value,notes:[document.getElementById("note").value.trim(),!supportaPreparazioni?Object.values(carrello).filter(r=>r.preparazione).map(r=>r.voce.nome+": "+r.preparazione).join("; "):""].filter(Boolean).join("\n"),items:Object.values(carrello).map(r=>({id:r.voce.id,quantity:r.qta,...(supportaPreparazioni?{preparation:r.preparazione||""}:{})})).sort((a,b)=>a.id.localeCompare(b.id)),expected_total_cents:Object.values(carrello).reduce((sum,r)=>sum+Math.round(Math.round(r.voce.prezzo*100)*r.qta),0),website:document.getElementById("website").value};
+ const body={id:ultimoOrdine.codice,customer_name:name,customer_phone:phone,pickup_date:document.getElementById("giorno").value,pickup_time:document.getElementById("ora").value,notes:[document.getElementById("note").value.trim(),Object.values(carrello).filter(r=>r.voce.lotto_fornitore).map(r=>"Lotto "+r.voce.nome+": "+r.voce.lotto_fornitore).join("; "),!supportaPreparazioni?Object.values(carrello).filter(r=>r.preparazione).map(r=>r.voce.nome+": "+r.preparazione).join("; "):""].filter(Boolean).join("\n"),items:Object.values(carrello).map(r=>({id:r.voce.id,quantity:r.qta,...(supportaPreparazioni?{preparation:r.preparazione||""}:{})})).sort((a,b)=>a.id.localeCompare(b.id)),expected_total_cents:Object.values(carrello).reduce((sum,r)=>sum+Math.round(Math.round(r.voce.prezzo*100)*r.qta),0),website:document.getElementById("website").value};
  invioInCorso=true;button.disabled=true;document.getElementById("chiudi").disabled=true;status.textContent="Invio in corso…";
  try{
   const identity=JSON.stringify({...body,id:undefined});
@@ -385,7 +393,12 @@ document.getElementById("nuovoOrdine").addEventListener("click",()=>{
 function apriCarta(id) {
   const v = tutte().find(x => x.id === id);
   if (!v) return;
+  cartaApertaId=id;
   const righe = [];
+  righe.push(["Specie / prodotto",escapa(v.nome)]);
+  if(v.lotto_fornitore)righe.push(["Lotto del fornitore",escapa(v.lotto_fornitore)]);
+  if(v.data_pesca)righe.push(["Data di pesca dichiarata",escapa(v.data_pesca)]);
+  if(v.paese_origine)righe.push(["Paese di origine",escapa(v.paese_origine)]);
   if (v.stato_prodotto||v.condizione) righe.push(["Stato del prodotto",escapa(v.stato_prodotto||v.condizione)]);
   if (v.glassatura) righe.push(["Glassatura",escapa(v.glassatura)+" %"]);
   if (v.data_congelamento) righe.push(["Data di congelamento",escapa(v.data_congelamento)]);
@@ -393,23 +406,26 @@ function apriCarta(id) {
   if (v.zona_fao) righe.push([v.metodo && /allev/i.test(v.metodo) ? "Paese di allevamento" : "Zona di pesca (FAO)", escapa(v.zona_fao)]);
   if (v.metodo) righe.push(["Metodo", escapa(v.metodo)]);
   if (v.attrezzo) righe.push(["Pescato con", escapa(v.attrezzo)]);
-  if (v.provenienza) righe.push(["Dal mercato", escapa(v.provenienza)]);
+  if (v.provenienza) righe.push(["Provenienza dichiarata", escapa(v.provenienza)]);
   if (v.data_arrivo || v.ora_arrivo) righe.push(["Arrivato", escapa([v.data_arrivo, v.ora_arrivo ? "alle " + v.ora_arrivo : ""].filter(Boolean).join(" "))]);
   if (v.allergeni) righe.push(["Allergeni", escapa(v.allergeni)]);
   const consiglio = v.consiglio ? `<div class="consiglio"><b>Il consiglio di Massimo</b><p>${escapa(v.consiglio)}</p></div>` : "";
   document.getElementById("cartaCorpo").innerHTML = `
     ${v.foto ? `<img class="carta-foto" src="${v.foto}" alt="${escapa(v.nome)}">` : ""}
     <h3>${escapa(v.nome)}</h3>
+    <p><b>${fmt(v.prezzo)}${v.unita?" / "+escapa(v.unita):" / porzione"}</b></p>
     ${righe.length ? `<dl class="carta-dati">${righe.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>` : ""}
     ${v.foto_didascalia?`<small>${escapa(v.foto_didascalia)}</small>`:""}
     ${consiglio}
+    ${scelteVoce({...v,consiglio:"",foto_didascalia:""},carrello[id]?.qta||0)}
     <div class="azioni-carta">
-      <button class="principale-carta" onclick="aggiungiDaCarta('${v.id}')" ${!v.disponibile || v.stato === "esaurito" || v.stato === "terminato" ? "disabled" : ""}>${v.stato === "esaurito" ? "Esaurito" : "Aggiungi all'ordine"}</button>
+      <button class="principale-carta" onclick="confermaCarta('${v.id}')" ${!v.disponibile || v.stato === "esaurito" || v.stato === "terminato" ? "disabled" : ""}>${nonOrdinabile(v)?"Non disponibile":carrello[id]?"Conferma scelta":"Aggiungi all'ordine"}</button>
       <button class="chiudi-carta" onclick="chiudiCarta()">Chiudi</button>
     </div>`;
   document.getElementById("carta").classList.add("aperta");
 }
-function chiudiCarta() { document.getElementById("carta").classList.remove("aperta"); }
+function confermaCarta(id){if(!carrello[id])aggiungiDaCarta(id);else chiudiCarta();}
+function chiudiCarta() { cartaApertaId=null;document.getElementById("carta").classList.remove("aperta"); }
 function aggiungiDaCarta(id) { cambia(id, 1); chiudiCarta(); }
 
 // ---- AVVIO ----
