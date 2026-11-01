@@ -304,7 +304,7 @@ async function load(){
    payButton.disabled=true;mutations++;
    try{await api("/api/payments",{method:"POST",body:JSON.stringify({...body,id:paymentId})});await load();$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;$("reportMsg").textContent="Movimento salvato. Premi Mostra resoconto per aggiornare.";}catch(e){$("msg").textContent=e.message;payButton.disabled=false;}finally{mutations--;}
   };
-  if(o.paid||o.status!=="cancelled")card.append(paymentForm);
+  if((o.paid&&o.recorded_balance_cents>0)||(!o.paid&&o.status!=="cancelled"))card.append(paymentForm);
   const select=element("select","");select.setAttribute("aria-label","Stato ordine "+o.id);
   for(const [value,title] of Object.entries(states)){const option=element("option",title);option.value=value;select.append(option);}select.value=o.status;card.append(select);
   async function change(body){mutations++;paid.disabled=select.disabled=true;try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify(body)});}catch(e){$("msg").textContent=e.message;paid.checked=!!o.paid;select.value=o.status;paid.disabled=select.disabled=false;return;}finally{mutations--;}await load();}
