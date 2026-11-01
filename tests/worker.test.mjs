@@ -37,6 +37,16 @@ assert.throws(()=>priceOrder(basicOrder({...input,items:[{id:'spigola',quantity:
 assert.throws(()=>priceOrder(basicOrder({...input,pickup_date:'2026-01-01'}),menu));
 menu.categorie[1].voci[0].stato='esaurito';
 assert.throws(()=>priceOrder(basicOrder(input),menu));
+// Each enabled preparation reaches the central database exactly as selected.
+menu.categorie[1].voci[0].stato='disponibile';menu.categorie[1].voci[0].prezzo=24;
+sqlite.exec('DELETE FROM order_limits');
+for(const preparation of ['Intero','Pulito','Sfilettato']){
+ const body={...input,id:crypto.randomUUID(),items:[{id:'spigola',quantity:1,preparation}]};
+ const response=await worker.fetch(request('/api/submit',body),env);assert.equal(response.status,201);
+ const row=sqlite.prepare('SELECT items_json FROM orders WHERE id=?').get(body.id);assert.equal(JSON.parse(row.items_json)[0].preparation,preparation);
+ sqlite.prepare('DELETE FROM orders WHERE id=?').run(body.id);
+}
+
 // Open inbox across dates, optional day filter and terminal-state archive.
 const insert=sqlite.prepare("INSERT INTO orders(id,customer_name,customer_phone,pickup_date,pickup_time,notes,items_json,total_cents,status) VALUES (?, 'Inbox test', '3331234567', ?, '09:00', '', '[]', 100, ?)");
 for(const [id,date,status] of [['earlier','2025-01-01','new'],['later','2028-01-01','confirmed'],['ready','2028-01-02','ready'],['collected','2028-01-01','collected'],['cancelled','2028-01-01','cancelled']])insert.run(id,date,status);
