@@ -158,7 +158,10 @@
           "prezzo": 45,
           "unita": "kg",
           "foto": "img/gamberi-rossi.jpg",
-          "disponibile": true
+          "disponibile": true,
+          "preparazioni": [
+            "Intero"
+          ]
         },
         {
           "id": "gamberetti-sgusciati",
@@ -174,7 +177,10 @@
           "prezzo": 2.5,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
-          "disponibile": true
+          "disponibile": true,
+          "preparazioni": [
+            "Già sgusciato"
+          ]
         },
         {
           "id": "trancio-tonno",
@@ -190,7 +196,10 @@
           "prezzo": 35,
           "unita": "kg",
           "foto": "img/misto-pesce.jpg",
-          "disponibile": true
+          "disponibile": true,
+          "preparazioni": [
+            "A tranci"
+          ]
         },
         {
           "id": "bianchetti",
@@ -206,7 +215,10 @@
           "prezzo": 3.5,
           "unita": "etto",
           "foto": "img/misto-pesce.jpg",
-          "disponibile": true
+          "disponibile": true,
+          "preparazioni": [
+            "Intero"
+          ]
         },
         {
           "id": "pesce-spada-udio",
@@ -223,7 +235,10 @@
           "allergeni": "",
           "disponibile": false,
           "stato": "disponibile",
-          "in_evidenza": true
+          "in_evidenza": true,
+          "preparazioni": [
+            "A tranci"
+          ]
         }
       ]
     },
