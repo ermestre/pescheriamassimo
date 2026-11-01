@@ -1,3 +1,124 @@
+const CLIENT_ORIGIN = 'https://ermestre.github.io';
+const MENU_URL = 'https://raw.githubusercontent.com/ermestre/pescheriamassimo/main/menu.json';
+const HOURS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','17:00','17:30','18:00','18:30','19:00'];
+function fail(message,status=400){throw Object.assign(new Error(message),{status});}
+function rome(now=new Date()){
+ const parts=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);
+ const get=k=>parts.find(p=>p.type===k).value;
+ return {date:get('year')+'-'+get('month')+'-'+get('day'),time:get('hour')+':'+get('minute')};
+}
+function addDays(date,n){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+function pickupDays(menu,now){
+ const today=rome(now).date;
+ return Array.from({length:14},(_,i)=>addDays(today,i)).filter(d=>new Date(d+'T12:00:00Z').getUTCDay()!==1 && !(menu.ritiro?.chiusure||[]).includes(d));
+}
+async function readMenu(){
+ const r=await fetch(MENU_URL,{cache:'no-store',signal:AbortSignal.timeout(10000)});
+ if(!r.ok)fail('Menu momentaneamente non disponibile. Riprova.',503);
+ const menu=await r.json();
+ if(!Array.isArray(menu.categorie))fail('Menu non valido',503);
+ // Finestre personalizzate richiedono una gestione esplicita: mai ignorarle.
+ if(menu.ritiro?.finestre_ritiro?.length)fail('Configurazione degli orari da aggiornare. Contatta la pescheria.',503);
+ return menu;
+}
+function deadline(rule,date){
+ if(!rule)return null;
+ const m=rule.trim().match(/^(\d{2}:\d{2}) del giorno (prima|stesso)$/i);
+ if(!m)fail('Termine ordini da verificare con la pescheria.',503);
+ return {date:addDays(date,m[2].toLowerCase()==='prima'?-1:0),time:m[1]};
+}
+function basicOrder(body){
+ if(!body || typeof body!=='object' || Array.isArray(body))fail('Ordine non valido');
+ if(body.website)fail('Ordine non valido');
+ const string=(key,min,max)=>{if(typeof body[key]!=='string')fail('Compila '+key);const v=body[key].trim();if(v.length<min||v.length>max)fail('Controlla '+key);return v;};
+ const id=string('id',36,36);
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))fail('Codice ordine non valido');
+ const name=string('customer_name',1,100),phone=string('customer_phone',6,30).replace(/\s/g,'');
+ if(!/^\+?[0-9]{6,15}$/.test(phone))fail('Controlla il numero di cellulare');
+ const date=string('pickup_date',10,10),time=string('pickup_time',5,5),notes=string('notes',0,2000);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(time))fail('Ritiro non valido');
+ if(!Array.isArray(body.items)||body.items.length<1||body.items.length>40)fail('Carrello non valido');
+ const seen=new Set();
+ const items=body.items.map(i=>{
+  if(!i || typeof i.id!=='string'||i.id.length>100 || seen.has(i.id) || typeof i.quantity!=='number'||!Number.isFinite(i.quantity)||i.quantity<=0||i.quantity>100)fail('Quantità non valida');
+  seen.add(i.id);return {id:i.id,quantity:i.quantity};
+ }).sort((a,b)=>a.id.localeCompare(b.id));
+ if(!Number.isSafeInteger(body.expected_total_cents)||body.expected_total_cents<0||body.expected_total_cents>1000000)fail('Totale non valido');
+ return {id,customer_name:name,customer_phone:phone,pickup_date:date,pickup_time:time,notes,items,total_cents:body.expected_total_cents};
+}
+function sameOrder(row,order){
+ return ['customer_name','customer_phone','pickup_date','pickup_time','notes','total_cents'].every(k=>row[k]===order[k]) && JSON.stringify(JSON.parse(row.items_json).map(i=>({id:i.id,quantity:i.quantity})).sort((a,b)=>a.id.localeCompare(b.id)))===JSON.stringify(order.items);
+}
+function priceOrder(order,menu,now=new Date()){
+ const current=rome(now);
+ if(menu.ritiro?.attivo===false)fail('Gli ordini online sono sospesi.');
+ if(!pickupDays(menu,now).includes(order.pickup_date))fail('Giorno di ritiro non disponibile');
+ if(order.pickup_date===current.date && order.pickup_time<=current.time)fail('Questo orario è già passato');
+ let total=0,evening=false;
+ const items=order.items.map(item=>{
+  const category=menu.categorie.find(c=>c.voci.some(v=>v.id===item.id));
+  const v=category?.voci.find(v=>v.id===item.id);
+  if(!v || !v.disponibile || ['esaurito','terminato'].includes(v.stato))fail('Un prodotto non è più disponibile. Aggiorna il menu.',409);
+  if(category.periodo && (!category.periodo.dal || !category.periodo.al || current.date<category.periodo.dal || current.date>category.periodo.al))fail('Prodotto fuori periodo',409);
+  const step=v.unita==='kg'?.5:1;
+  if(Math.abs(item.quantity/step-Math.round(item.quantity/step))>1e-8)fail('Quantità non valida per '+v.nome);
+  if(typeof v.prezzo!=='number'||!Number.isFinite(v.prezzo)||v.prezzo<0)fail('Prezzo da verificare',503);
+  const limit=deadline(v.ordini_entro||category.ordini_entro||menu.ritiro?.ordini_entro,order.pickup_date);
+  if(limit && (current.date>limit.date || (current.date===limit.date && current.time>limit.time)))fail('Termine ordini superato per '+v.nome+'. Scegli un altro giorno.');
+  evening ||= !!v.su_ordinazione;
+  const unit_price_cents=Math.round(v.prezzo*100),line_total_cents=Math.round(unit_price_cents*item.quantity);
+  total+=line_total_cents;
+  return {...item,name:v.nome,unit:v.unita||'porzioni',unit_price_cents,line_total_cents};
+ });
+ const hours=evening?(menu.ritiro?.orari_sera||['18:30','19:00','19:30','20:00']):HOURS;
+ if(!hours.includes(order.pickup_time))fail('Orario di ritiro non disponibile');
+ if(total!==order.total_cents)fail('I prezzi sono cambiati. Aggiorna il menu e controlla il totale prima di inviare.',409);
+ return {...order,items};
+}
+async function limitedBody(request,max=20000){
+ if(!request.body)fail('Richiesta vuota');
+ const reader=request.body.getReader();const chunks=[];let size=0;
+ while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>max){await reader.cancel();fail('Ordine troppo grande',413);}chunks.push(value);}
+ const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length;}
+ try{return JSON.parse(new TextDecoder().decode(bytes));}catch{fail('Richiesta non valida');}
+}
+async function rateLimit(request,env){
+ const ip=request.headers.get('CF-Connecting-IP');if(!ip)fail('Connessione non verificabile',503);
+ const bucket=Math.floor(Date.now()/600000);
+ const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.ADMIN_TOKEN+':'+ip+':'+bucket));
+ const key=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+ await env.db.prepare('CREATE TABLE IF NOT EXISTS order_limits (key TEXT PRIMARY KEY, bucket INTEGER NOT NULL, count INTEGER NOT NULL)').run();
+ await env.db.prepare('DELETE FROM order_limits WHERE bucket < ?').bind(bucket-1).run();
+ for(const [k,b,max] of [[key,bucket,10],['global:'+bucket,bucket,100]]){
+  const row=await env.db.prepare('INSERT INTO order_limits (key,bucket,count) VALUES (?, ?, 1) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count').bind(k,b).first();
+  if(row.count>max)fail('Troppi tentativi. Attendi qualche minuto o contatta la pescheria.',429);
+ }
+}
+async function publicApi(request,env){
+ const url=new URL(request.url),origin=request.headers.get('Origin');
+ const cors=origin===CLIENT_ORIGIN?{'Access-Control-Allow-Origin':CLIENT_ORIGIN,'Vary':'Origin'}:{};
+ const respond=(data,status=200)=>{const r=json(data,status);for(const [k,v] of Object.entries(cors))r.headers.set(k,v);return r;};
+ if(origin && origin!==CLIENT_ORIGIN && origin!==url.origin)return respond({errore:'Origine non consentita'},403);
+ if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...cors,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}});
+ try{
+  if(!env.db || typeof env.ADMIN_TOKEN!=='string' || env.ADMIN_TOKEN.length<20)fail('Ordini online non ancora configurati',503);
+  if(url.pathname==='/api/config' && request.method==='GET'){
+   const menu=await readMenu();return respond({ok:true,menu,days:pickupDays(menu,new Date())});
+  }
+  if(url.pathname!=='/api/submit' || request.method!=='POST')return respond({errore:'Operazione non disponibile'},404);
+  if(!origin)fail('Invia l’ordine dal sito della pescheria',403);
+  if(!(request.headers.get('Content-Type')||'').startsWith('application/json'))fail('Formato non valido',415);
+  const order=basicOrder(await limitedBody(request));
+  await rateLimit(request,env);
+  const existing=await env.db.prepare('SELECT * FROM orders WHERE id = ?').bind(order.id).first();
+  if(existing){if(!sameOrder(existing,order))fail('Codice già usato per un altro ordine. Crea un nuovo ordine.',409);return respond({ok:true,id:existing.id,total_cents:existing.total_cents,already_received:true});}
+  const priced=priceOrder(order,await readMenu());
+  const result=await env.db.prepare('INSERT INTO orders (id,customer_name,customer_phone,pickup_date,pickup_time,notes,items_json,total_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING').bind(priced.id,priced.customer_name,priced.customer_phone,priced.pickup_date,priced.pickup_time,priced.notes,JSON.stringify(priced.items),priced.total_cents).run();
+  if(!result.meta.changes){const row=await env.db.prepare('SELECT * FROM orders WHERE id = ?').bind(priced.id).first();if(!row||!sameOrder(row,order))fail('Codice ordine già utilizzato',409);}
+  return respond({ok:true,id:priced.id,total_cents:priced.total_cents},201);
+ }catch(e){return respond({errore:e.status?e.message:'Servizio momentaneamente non disponibile. Riprova con lo stesso ordine.'},e.status||503);}
+}
+
 // Pescheria Massimo: pannello ordini protetto. Binding D1: db.
 const HEADERS = {"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"};
 function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{...HEADERS,"Content-Type":"application/json; charset=utf-8"}});}
@@ -13,6 +134,7 @@ async function authorized(request,env){
 export default {
  async fetch(request,env){
   const url=new URL(request.url);
+  if(["/api/config","/api/submit"].includes(url.pathname))return publicApi(request,env);
   if(request.method==="GET" && (url.pathname==="/" || url.pathname==="/admin")){
    return new Response(PAGE,{headers:{...HEADERS,"Content-Type":"text/html; charset=utf-8",
    "Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"}});
@@ -53,14 +175,15 @@ export default {
 };
 const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ordini · Pescheria Massimo</title>
-<style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}input[type=password]{width:100%}</style>
+<style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
 <h1>Ordini · Pescheria Massimo</h1>
-<form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required></label><button>Accedi</button><p>La chiave resta in memoria fino alla chiusura o all’aggiornamento della pagina.</p></form>
+<form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><button>Accedi</button><p>La chiave resta in memoria fino alla chiusura o all’aggiornamento della pagina.</p></form>
 <section id="panel" hidden><div class="bar"><label>Data ritiro <input id="day" type="date"></label><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><p id="totals"></p><div id="orders"></div></section>
 <p id="msg" role="status" aria-live="polite"></p>
 <script>
 let token="";
 const $=id=>document.getElementById(id);
+$("showKey").onchange=()=>{$("key").type=$("showKey").checked?"text":"password";};
 const money=n=>new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n/100);
 const states={new:"Nuovo",confirmed:"Confermato",ready:"Pronto",collected:"Ritirato",cancelled:"Annullato"};
 $("day").value=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Rome"}).format(new Date());
@@ -94,7 +217,7 @@ async function load(){
   paid.onchange=()=>change({paid:paid.checked});select.onchange=()=>change({status:select.value});
   $("orders").append(card);
  }
- $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":"Nessun ordine per questa data. Il sito clienti deve ancora essere collegato.";
+ $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":"Nessun ordine per questa data.";
  }catch(e){$("msg").textContent=e.message;}
 }
 $("login").onsubmit=e=>{e.preventDefault();token=$("key").value;$("key").value="";load();};
