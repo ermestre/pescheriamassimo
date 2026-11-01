@@ -2,6 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
+<meta name="pm-release" content="menu-restored-20261101">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Pescheria da Massimo</title>
 <style>
@@ -50,7 +51,6 @@
   .carta-dati { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; margin: 12px 0; }
   .carta-dati dt { color: var(--grigio); }
   .carta-dati dd { margin: 0; font-weight: 600; }
-  .avvertenza { color:#8a1c12; font-size:13px; font-weight:700; margin: 8px 0; }
   .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
   .consiglio p { margin: 4px 0 0; }
   .miniatura { width: 100%; max-height: 160px; object-fit: contain; background:#fff; border-radius: 8px; margin-bottom: 8px; }
@@ -60,7 +60,7 @@
 
 <header>
   <h1>Gestione Pescheria da Massimo</h1>
-  <p>Menu, prezzi, pesce del giorno e Natale</p>
+  <p>Gestione riservata: menu, prezzi, foto e informazioni dei fornitori</p>
 </header>
 
 <main>
@@ -84,9 +84,11 @@
     <div data-scheda="menu">
       <section>
         <h2>Menu</h2>
+        <label for="notaMenu">Avviso generale per i clienti</label><textarea id="notaMenu" oninput="segna()"></textarea>
         <div id="categorie"></div>
       </section>
 
+      <section><h2>QR unico del menu</h2><p class="aiuto">Lo stesso QR apre sempre il menu aggiornato. Stampalo per il banco o condividilo. Nessun codice da cambiare ogni giorno.</p><a href="img/qr-menu.svg" target="_blank" rel="noopener">Apri il QR del menu</a><p><a href="index.html" target="_blank" rel="noopener">Apri il sito clienti</a></p></section>
       <section>
         <h2>Aggiungi dal catalogo</h2>
         <label for="catalogo">Specie</label>
@@ -189,7 +191,6 @@
   <option value="nassa"></option>
   <option value="canna o lenza"></option>
 </datalist>
-
 <script>
 // ---- CONFIGURAZIONE ----
 // Il repository si ricava dall'indirizzo della pagina (proprietario.github.io/repo/)
@@ -329,6 +330,7 @@ function mostraEditor() {
   $("cambiaCodice").innerHTML = `<a href="#" id="esci">Cambia codice di accesso</a>`;
   $("esci").addEventListener("click", e => { e.preventDefault(); togliCodice(); location.reload(); });
 
+  $("notaMenu").value = dati.nota || "";
   $("whatsapp").value = dati.whatsapp || "";
   $("entro").value = (dati.ritiro && dati.ritiro.ordini_entro) || "";
 
@@ -363,7 +365,6 @@ function bloccoCategoria(c, forzaCi) {
     ${c.voci.length === 0 ? `<p class="piccolo">Nessuna proposta ancora: aggiungile da "Aggiungi una voce".</p>` : ""}`;
 }
 
-// Campo con suggerimenti da elenco, ma sempre libero (si può scrivere anche un valore non in lista)
 function campoLista(ci, vi, k, etichetta, v, listaId) {
   return `<div><label>${etichetta}</label><input list="${listaId}" value="${esc(v[k] || "")}" onchange="aggiornaCampo(${ci},${vi},'${k}',this.value)"></div>`;
 }
@@ -414,40 +415,30 @@ function voceHtml(ci, vi, v) {
         <input type="file" accept="image/*" onchange="caricaFoto(${ci},${vi},this)">
       </details>
       <details>
+        <summary>Preparazioni disponibili</summary>
+        <p class="piccolo">Attiva solo i servizi confermati da Massimo. Nessun supplemento viene aggiunto automaticamente. Se tutti i campi sono vuoti il cliente non vede questa scelta.</p>
+        ${["Intero","Pulito","Sfilettato","A filetti"].map(x=>`<label class="check"><input type="checkbox" ${(v.preparazioni||[]).includes(x)?"checked":""} onchange="aggiornaPreparazioni(${ci},${vi},'${x}',this.checked)"> ${x}</label>`).join("")}
+      </details>
+      <details>
         <summary>Scheda del pesce e tracciabilità</summary>
         <p class="piccolo">Lascia vuoto ciò che non sai: non viene mostrato al cliente.</p>
         <div class="campi">
+          <div><label>Stato del prodotto (da etichetta)</label><select onchange="aggiornaCampo(${ci},${vi},'stato_prodotto',this.value)">${["","Fresco","Decongelato","Congelato","Surgelato"].map(x=>`<option value="${x}" ${v.stato_prodotto===x?"selected":""}>${x||"Da compilare"}</option>`).join("")}</select></div>
           ${campoTesto(ci, vi, "nome_scientifico", "Nome scientifico", v)}
-          ${campoLista(ci, vi, "zona_fao", "Zona FAO / paese", v, "lista-zone")}
-          ${campoLista(ci, vi, "metodo", "Metodo", v, "lista-metodo")}
-          ${campoTesto(ci, vi, "provenienza", "Provenienza / mercato", v)}
-          ${campoTesto(ci, vi, "data_arrivo", "Data di arrivo", v)}
+          ${campoLista(ci, vi, "zona_fao", "Zona FAO / paese", v,"lista-zone")}
+          ${campoLista(ci, vi, "metodo", "Produzione: pescato / allevato (da etichetta)", v,"lista-metodo")}
+          ${campoTesto(ci, vi, "provenienza", "Provenienza documentata / mercato", v)}
+          ${campoTesto(ci, vi, "data_arrivo", "Arrivo in pescheria (non data di pesca)", v)}
           ${campoTesto(ci, vi, "ora_arrivo", "Ora di arrivo (es. 07:30)", v)}
-          ${campoLista(ci, vi, "attrezzo", "Attrezzo di pesca", v, "lista-attrezzi")}
+          ${campoLista(ci, vi, "attrezzo", "Attrezzo di pesca", v,"lista-attrezzi")}
           ${campoTesto(ci, vi, "allergeni", "Allergeni", v)}
+          ${campoTesto(ci, vi, "glassatura", "Glassatura (%) da etichetta", v)}
+          ${campoTesto(ci, vi, "data_congelamento", "Data di congelamento da etichetta", v)}
+          ${campoTesto(ci, vi, "foto_didascalia", "Didascalia foto (es. Immagine indicativa)", v)}
           ${campoTesto(ci, vi, "porzione", "Porzione (es. 300 g)", v)}
         </div>
         <div class="campi uno" style="margin-top:8px">
-          <div>
-            <label>Condizione del prodotto</label>
-            <select onchange="aggiornaCampo(${ci},${vi},'condizione',this.value)">
-              <option value="" ${!v.condizione ? "selected" : ""}>non indicata</option>
-              <option value="fresco" ${v.condizione === "fresco" ? "selected" : ""}>Fresco</option>
-              <option value="congelato" ${v.condizione === "congelato" ? "selected" : ""}>Congelato</option>
-              <option value="surgelato" ${v.condizione === "surgelato" ? "selected" : ""}>Surgelato</option>
-              <option value="decongelato" ${v.condizione === "decongelato" ? "selected" : ""}>Decongelato (da consumare entro 24 ore)</option>
-            </select>
-          </div>
-        </div>
-        <div class="campi">
-          ${campoTesto(ci, vi, "glassatura", "Glassatura (%)", v)}
-          ${campoTesto(ci, vi, "data_congelamento", "Data di congelamento", v)}
-        </div>
-        <div class="campi uno" style="margin-top:8px">
-          <div>
-            <label>Consiglio di cottura di Massimo</label>
-            <textarea rows="3" placeholder="Es. In umido con due pomodorini" onchange="aggiornaCampo(${ci},${vi},'consiglio',this.value)">${esc(v.consiglio || "")}</textarea>
-          </div>
+          <div><label>Consiglio di cottura di Massimo</label><textarea rows="3" onchange="aggiornaCampo(${ci},${vi},'consiglio',this.value)">${esc(v.consiglio||"")}</textarea></div>
         </div>
       </details>
       <button class="elimina" onclick="eliminaVoce(${ci},${vi})">Elimina voce</button>
@@ -455,6 +446,7 @@ function voceHtml(ci, vi, v) {
 }
 
 // ---- MODIFICHE AI DATI ----
+function aggiornaPreparazioni(ci,vi,value,checked){const v=dati.categorie[ci].voci[vi];const values=new Set(v.preparazioni||[]);if(checked)values.add(value);else values.delete(value);v.preparazioni=["Intero","Pulito","Sfilettato","A filetti"].filter(x=>values.has(x));segna();}
 function aggiornaCampo(ci, vi, k, val) { dati.categorie[ci].voci[vi][k] = val.trim(); segna(); }
 function aggiornaPrezzo(ci, vi, val) { dati.categorie[ci].voci[vi].prezzo = Number(val) || 0; segna(); }
 function aggiornaUnita(ci, vi, val) { dati.categorie[ci].voci[vi].unita = val || null; segna(); }
@@ -463,6 +455,7 @@ function aggiornaPeriodo(ci, k, val) { dati.categorie[ci].periodo[k] = val; segn
 function aggiornaCampoCat(ci, k, val) { dati.categorie[ci][k] = val.trim(); segna(); }
 
 function leggiTestate() {
+  dati.nota = $("notaMenu").value.trim();
   dati.whatsapp = $("whatsapp").value.replace(/\D/g, "");
   dati.ritiro = dati.ritiro || {};
   dati.ritiro.ordini_entro = $("entro").value.trim();
@@ -591,26 +584,25 @@ async function caricaFoto(ci, vi, input) {
 function anteprima(ci, vi) {
   const v = dati.categorie[ci].voci[vi];
   const righe = [];
+  if (v.stato_prodotto||v.condizione) righe.push(["Stato del prodotto",esc(v.stato_prodotto||v.condizione)]);
+  if (v.glassatura) righe.push(["Glassatura",esc(v.glassatura)+" %"]);
+  if (v.data_congelamento) righe.push(["Data di congelamento",esc(v.data_congelamento)]);
+  if (v.preparazioni?.length) righe.push(["Preparazioni",esc(v.preparazioni.join(", "))]);
   if (v.nome_scientifico) righe.push(["Nome scientifico", `<i>${esc(v.nome_scientifico)}</i>`]);
   if (v.zona_fao) righe.push([v.metodo && /allev/i.test(v.metodo) ? "Paese di allevamento" : "Zona di pesca (FAO)", esc(v.zona_fao)]);
   if (v.metodo) righe.push(["Metodo", esc(v.metodo)]);
   if (v.attrezzo) righe.push(["Pescato con", esc(v.attrezzo)]);
   if (v.provenienza) righe.push(["Dal mercato", esc(v.provenienza)]);
   if (v.data_arrivo || v.ora_arrivo) righe.push(["Arrivato", esc([v.data_arrivo, v.ora_arrivo ? "alle " + v.ora_arrivo : ""].filter(Boolean).join(" "))]);
-  const etichetteCondizione = { fresco: "Fresco", congelato: "Congelato", surgelato: "Surgelato", decongelato: "Decongelato" };
-  if (v.condizione) righe.push(["Condizione", etichetteCondizione[v.condizione] || esc(v.condizione)]);
-  if (v.condizione === "congelato" && v.glassatura) righe.push(["Glassatura", esc(v.glassatura) + "% (tara)"]);
-  if (v.data_congelamento) righe.push(["Congelato il", esc(v.data_congelamento)]);
   if (v.allergeni) righe.push(["Allergeni", esc(v.allergeni)]);
   if (v.porzione) righe.push(["Porzione", esc(v.porzione)]);
-  const avvertenza = v.condizione === "decongelato" ? `<p class="avvertenza">Pesce decongelato: da consumarsi entro 24 ore e da non ricongelare.</p>` : "";
-  const consiglio = v.consiglio ? `<div class="consiglio"><b>Il consiglio di Massimo</b><p>${esc(v.consiglio).replace(/\n/g, "<br>")}</p></div>` : "";
+  const consiglio = v.consiglio ? `<div class="consiglio"><b>Il consiglio di Massimo</b><p>${esc(v.consiglio)}</p></div>` : "";
   $("anteprimaCorpo").innerHTML = `
     <p class="piccolo">Anteprima: così la vede il cliente (usa anche i dati non ancora salvati)</p>
     ${v.foto ? `<img class="carta-foto" src="${esc(v.foto)}" alt="">` : ""}
     <h3>${esc(v.nome)}</h3>
     ${righe.length ? `<dl class="carta-dati">${righe.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>` : `<p class="piccolo">Nessun dato di tracciabilità ancora inserito.</p>`}
-    ${avvertenza}
+    ${v.foto_didascalia?`<p class="piccolo">${esc(v.foto_didascalia)}</p>`:""}
     ${consiglio}
     <button class="secondario" style="width:100%;margin-top:14px" onclick="chiudiAnteprima()">Chiudi</button>`;
   $("anteprima").classList.add("aperta");
