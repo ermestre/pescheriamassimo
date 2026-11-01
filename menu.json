@@ -72,7 +72,9 @@
           "foto": "img/spigola-orata.jpg",
           "disponibile": true,
           "preparazioni": [
-            "Intero"
+            "Intero",
+            "Pulito",
+            "Sfilettato"
           ],
           "foto_didascalia": "Immagine indicativa"
         },
@@ -92,7 +94,9 @@
           "foto": "img/spigola-orata.jpg",
           "disponibile": true,
           "preparazioni": [
-            "Intero"
+            "Intero",
+            "Pulito",
+            "Sfilettato"
           ],
           "foto_didascalia": "Immagine indicativa"
         },
@@ -112,7 +116,9 @@
           "foto": "img/rombo-sogliola.jpg",
           "disponibile": true,
           "preparazioni": [
-            "Intero"
+            "Intero",
+            "Pulito",
+            "Sfilettato"
           ],
           "foto_didascalia": "Immagine indicativa"
         },
@@ -132,7 +138,9 @@
           "foto": "img/rombo-sogliola.jpg",
           "disponibile": true,
           "preparazioni": [
-            "Intero"
+            "Intero",
+            "Pulito",
+            "Sfilettato"
           ],
           "foto_didascalia": "Immagine indicativa"
         },
