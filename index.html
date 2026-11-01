@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="schede-pesce-20261101">
+<meta name="pm-release" content="festivita-20261101">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pescheria da Massimo</title>
 <style>
@@ -156,7 +156,7 @@ const ORARI = ["09:00","09:30","10:00","10:30","11:00","11:30","12:00","17:00","
 const ORARI_SERA = ["18:30","19:00","19:30","20:00"]; // ritiro serale per la frittura (riserva)
 
 const API_ORDINI = "https://pescheria-massimo-api.ermestrerm.workers.dev";
-let supportaPreparazioni=false;
+let supportaPreparazioni=false,supportaFestivita=false;
 let apiPronta=false, invioInCorso=false, riepilogoInviato=false;
 // ---- STATO ----
 let menu = null;
@@ -169,7 +169,12 @@ const tutte = () => menu.categorie.flatMap(c => c.voci);
 
 const fmtQ = n => String(n).replace(".", ",");
 const quantita = (v,q) => v.unita==="kg" ? (q<1?Math.round(q*1000)+" g":fmtQ(q)+" kg") : v.unita==="etto" ? Math.round(q*100)+" g" : q+" "+(q===1?"porzione":"porzioni");
-const nonOrdinabile = v => !v.disponibile || ["esaurito","terminato"].includes(v.stato);
+function festaChiusa(c){
+ if(!c?.scadenza_data)return false;
+ const now=new Date(),date=now.toLocaleDateString('sv-SE',{timeZone:'Europe/Rome'}),time=now.toLocaleTimeString('it-IT',{timeZone:'Europe/Rome',hour:'2-digit',minute:'2-digit',hour12:false});
+ return date>c.scadenza_data||(date===c.scadenza_data&&time>(c.scadenza_ora||'00:00'));
+}
+const nonOrdinabile = v => {const c=menu?.categorie.find(c=>c.voci.some(x=>x.id===v.id));return !v.disponibile||["esaurito","terminato"].includes(v.stato)||(c&&(!categoriaAttiva(c)||festaChiusa(c)||(c.id==="natale"&&!supportaFestivita)));};
 const escapa = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 // Riga di tracciabilità: compare solo per i campi compilati
 function traccia(v) {
@@ -224,12 +229,17 @@ function scegliPreparazione(id,value){const voce=tutte().find(v=>v.id===id);if(!
 
 // Una categoria con periodo compare solo nelle date impostate; senza date resta nascosta
 function categoriaAttiva(c) {
+  if (c.attiva===false) return false;
   if (!c.periodo) return true;
   if (!c.periodo.dal || !c.periodo.al) return false;
-  const oggi = new Date().toLocaleDateString("sv-SE"); // formato AAAA-MM-GG
+  const oggi = new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"}); // formato AAAA-MM-GG
   return oggi >= c.periodo.dal && oggi <= c.periodo.al;
 }
 
+function festaIntro(c){
+ const data=d=>new Date(d+'T12:00:00Z').toLocaleDateString('it-IT',{timeZone:'Europe/Rome',day:'numeric',month:'long',year:'numeric'});
+ return `<div class="oggi" style="padding:16px;display:block;border:2px solid #d5a74c"><strong>${escapa(c.ricorrenza||'Festività')}</strong>${!supportaFestivita?'<p><b>Prenotazioni della festività in preparazione.</b></p>':''}${festaChiusa(c)?'<p><b>Prenotazioni chiuse per questa ricorrenza.</b></p>':''}${c.presentazione?`<p style="white-space:pre-wrap">${escapa(c.presentazione)}</p>`:''}${c.ritiro_data?`<p>Ritiro: <b>${escapa(data(c.ritiro_data))}</b>. Scegli questa data prima di inviare l'ordine.</p>`:''}${c.scadenza_data?`<p>Prenotazioni entro il ${escapa(data(c.scadenza_data))} alle ${escapa(c.scadenza_ora)}.</p>`:''}<p>Scegli i piatti e le quantità qui sotto. L'ordine attende la conferma della pescheria.</p></div>`;
+}
 function render() {
   const avviso=document.getElementById("avvisoMenu");avviso.textContent=menu.nota||"";avviso.hidden=!menu.nota;
   const inEvidenza = tutte().find(v => v.in_evidenza && !nonOrdinabile(v));
@@ -244,7 +254,7 @@ function render() {
     </div>` : "";
 
   document.getElementById("menu").innerHTML = menu.categorie.filter(categoriaAttiva).map(c =>
-    `<h2>${c.nome}</h2>${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")
+    `<h2>${escapa(c.nome)}</h2>${c.id==="natale"?festaIntro(c):""}${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")
   ).join("");
   aggiornaTotali();
   if(cartaApertaId)apriCarta(cartaApertaId);
@@ -265,6 +275,9 @@ function cambia(id, delta) {
 
 // Se nel carrello c'è la frittura su ordinazione, il ritiro è solo serale
 function aggiornaOrari() {
+  const festa=menu?.categorie.find(c=>c.id==='natale'&&c.ritiro_data&&c.voci.some(v=>carrello[v.id]));
+  if(festa){const day=document.getElementById('giorno');if(Array.from(day.options||[]).some(o=>o.value===festa.ritiro_data))day.value=festa.ritiro_data;}
+
   const serve = Object.values(carrello).some(r => r.voce.su_ordinazione);
   const serali = (menu && menu.ritiro && menu.ritiro.orari_sera) || ORARI_SERA;
   const scelta = serve ? serali : ORARI;
@@ -346,7 +359,7 @@ async function collegaOrdini(){
   const response=await fetch(API_ORDINI+"/api/config",{cache:"no-store",signal:AbortSignal.timeout(15000)});
   const config=await response.json();
   if(!response.ok || !config.ok)throw new Error(config.errore||"Servizio non disponibile");
-  menu=config.menu;supportaPreparazioni=config.preparations_supported===true;
+  menu=config.menu;supportaPreparazioni=config.preparations_supported===true;supportaFestivita=config.festivities_supported===true;
   const sel=document.getElementById("giorno"),previous=sel.value;
   sel.replaceChildren();
   for(const date of config.days){const opt=document.createElement("option");opt.value=date;opt.textContent=new Date(date+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});sel.append(opt);}
