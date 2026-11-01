@@ -238,13 +238,13 @@ const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="v
 <title>Ordini · Pescheria Massimo</title>
 <style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
 <h1>Ordini · Pescheria Massimo</h1>
-<form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><label><input id="rememberAccess" type="checkbox"> Ricordami su questo dispositivo</label><button>Accedi</button><p>Se selezioni Ricordami, la chiave viene conservata in questo browser. Chi usa questo browser potrà aprire gli ordini. Esci cancella l'accesso salvato.</p></form>
+<form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><label><input id="rememberAccess" type="checkbox"> Ricordami su questo dispositivo</label><button id="loginButton">Accedi</button><p>Se selezioni Ricordami, la chiave viene conservata in questo browser. Chi usa questo browser potrà aprire gli ordini. Esci cancella l'accesso salvato.</p></form>
 <section id="panel" hidden><p id="sessionStatus"></p><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><details><summary>Suono personalizzato</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details><div id="orders"></div></section>
 <p id="msg" role="status" aria-live="polite"></p>
 <script>
 let token="",loadSeq=0,alertAudio=null,alertsEnabled=false,polling=false,mutations=0;
 const seenOrders=new Set();let ordersBaseline=false;
-const ACCESS_KEY="pm-admin-access-v1";let rememberWanted=false,accessSaved=false;
+const ACCESS_KEY="pm-admin-access-v1";let rememberWanted=false,accessSaved=false,authGeneration=0,loginBusy=false;
 function removeSavedAccess(){try{localStorage.removeItem(ACCESS_KEY);return true;}catch(e){return false;}}
 function saveAccess(){
  if(accessSaved)return;accessSaved=true;
@@ -254,7 +254,10 @@ function saveAccess(){
  }catch(e){$("sessionStatus").textContent="Il browser non consente di salvare o rimuovere l'accesso. Per rimuovere una chiave già salvata, cancella i dati di questo sito nelle impostazioni del browser.";}
 }
 function startLogin(key,remember){
- token=key;rememberWanted=remember;accessSaved=false;$("key").value="";$("view").value="open";$("day").value="";load().then(checkOrders);
+ if(loginBusy)return;
+ loginBusy=true;const generation=++authGeneration;$("loginButton").disabled=true;
+ token=key;rememberWanted=remember;accessSaved=false;$("view").value="open";$("day").value="";
+ return load().then(checkOrders).finally(()=>{if(generation===authGeneration||!token){loginBusy=false;$("loginButton").disabled=false;}});
 }
 
 const $=id=>document.getElementById(id);
@@ -272,12 +275,24 @@ function confirmationUrl(o){
 }
 function element(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
 async function api(path,options={}){
- const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},cache:"no-store"});
- const data=await response.json();
- if(!response.ok){if(response.status===401)exit();throw new Error(data.errore||"Operazione non riuscita");}
- return data;
+ const requestToken=token,generation=authGeneration;
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+ try{
+  const response=await fetch(path,{...options,signal:controller.signal,headers:{"Authorization":"Bearer "+requestToken,"Content-Type":"application/json"},cache:"no-store"});
+  let data;try{data=await response.json();}catch(e){if(controller.signal.aborted)throw e;throw new Error("Risposta non valida dal servizio. Riprova tra poco.");}
+  if(!response.ok){
+   const message=data.errore||"Operazione non riuscita";
+   if(response.status===401&&generation===authGeneration){
+    const choice=rememberWanted;exit();$("rememberAccess").checked=choice;
+    $("msg").textContent=message+". La chiave non è stata salvata. Controlla il valore inserito e riprova.";
+   }
+   throw new Error(message);
+  }
+  return data;
+ }catch(e){if(controller.signal.aborted)throw new Error("Il servizio non risponde entro 15 secondi. Riprova: nessun ordine è stato cancellato.");throw e;}
+ finally{clearTimeout(timer);}
 }
-function exit(){const cleared=removeSavedAccess();rememberWanted=false;$("rememberAccess").checked=false;ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;return cleared;}
+function exit(){authGeneration++;loginBusy=false;$("loginButton").disabled=false;const cleared=removeSavedAccess();rememberWanted=false;$("rememberAccess").checked=false;ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;return cleared;}
 async function load(){
  const seq=++loadSeq;
  $("orders").replaceChildren();$("totals").textContent="";$("scope").textContent="";
@@ -287,7 +302,7 @@ async function load(){
  if($("day").value)query.set("date",$("day").value);
  const data=await api("/api/orders?"+query);
  if(seq!==loadSeq || !token)return;
- saveAccess();
+ saveAccess();$("key").value="";
  $("scope").textContent=($("view").value==="open"?"Ordini da gestire: nuovi, confermati e pronti":"Archivio: tutti gli stati")+($("day").value?" · Ritiro "+formatDate($("day").value):" · Tutte le date di ritiro");
  $("login").hidden=true;$("panel").hidden=false;$("orders").replaceChildren();
  const active=data.orders.filter(o=>o.status!=="cancelled");
