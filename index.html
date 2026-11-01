@@ -203,12 +203,12 @@ function cardHtml(v) {
 
 
 function scelteVoce(v,q){
- const off=nonOrdinabile(v),prep=carrello[v.id]?.preparazione||v.preparazioni?.[0]||"";
+ const off=nonOrdinabile(v), opzioni=v.preparazioni?.length ? [...new Set([...v.preparazioni,"Pulito","Sfilettato"])] : [],prep=carrello[v.id]?.preparazione||opzioni[0]||"";
  return `<div class="scelte">
  ${v.foto_didascalia?`<small>${escapa(v.foto_didascalia)}</small>`:""}
  ${v.unita==="kg"?`<div class="pesi" aria-label="Scegli peso">${[.5,1,1.5].map(n=>`<button onclick="scegliPeso('${v.id}',${n})" ${off?"disabled":""} aria-pressed="${q===n}">${quantita(v,n)}</button>`).join("")}</div>`:""}
  ${q>0?`<div><b>${quantita(v,q)} · ${fmt(Math.round(Math.round(v.prezzo*100)*q)/100)}</b></div>`:""}
- ${v.preparazioni?.length?`<label>Preparazione <select ${off?"disabled":""} onchange="scegliPreparazione('${v.id}',this.value)">${v.preparazioni.map(x=>`<option ${x===prep?"selected":""}>${escapa(x)}</option>`).join("")}</select></label><small>Peso e totale indicativi; peso finale e importo da confermare al banco.</small>`:""}
+ ${opzioni.length?`<label>Preparazione <select ${off?"disabled":""} onchange="scegliPreparazione('${v.id}',this.value)">${opzioni.map(x=>`<option ${x===prep?"selected":""}>${escapa(x)}</option>`).join("")}</select></label><small>Peso e totale indicativi; peso finale e importo da confermare al banco.</small>`:""}
  ${v.consiglio?`<p class="consiglio"><b>Il consiglio di Massimo:</b> ${escapa(v.consiglio)}</p>`:""}
  </div>`;
 }
