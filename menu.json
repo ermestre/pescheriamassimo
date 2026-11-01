@@ -310,13 +310,68 @@
     },
     {
       "id": "natale",
-      "nome": "Specialità di Natale",
+      "nome": "Menu di Natale",
       "periodo": {
-        "dal": "",
-        "al": ""
+        "dal": "2026-11-01",
+        "al": "2026-11-02"
       },
       "ordini_entro": "",
-      "voci": []
+      "voci": [
+        {
+          "id": "festa-ylov",
+          "nome": "Vongole veraci",
+          "descrizione": "",
+          "prezzo": 18,
+          "unita": "kg",
+          "disponibile": true,
+          "stato": "disponibile",
+          "preparazioni": [
+            "Pulito"
+          ],
+          "foto": "img/festa-ylov.jpg"
+        },
+        {
+          "id": "festa-0q0x",
+          "nome": "baccala",
+          "descrizione": "",
+          "prezzo": 5,
+          "unita": "kg",
+          "disponibile": true,
+          "stato": "disponibile",
+          "foto": "img/festa-0q0x.jpg"
+        },
+        {
+          "id": "festa-0rkj",
+          "nome": "Nuovo piatto della festa",
+          "descrizione": "",
+          "prezzo": 0,
+          "unita": "porzioni",
+          "disponibile": false,
+          "stato": "disponibile"
+        },
+        {
+          "id": "festa-b5aj",
+          "nome": "Nuovo piatto della festa",
+          "descrizione": "",
+          "prezzo": 0,
+          "unita": "porzioni",
+          "disponibile": false,
+          "stato": "disponibile"
+        },
+        {
+          "id": "festa-cmyw",
+          "nome": "Nuovo piatto della festa",
+          "descrizione": "",
+          "prezzo": 0,
+          "unita": "porzioni",
+          "disponibile": false,
+          "stato": "disponibile"
+        }
+      ],
+      "attiva": false,
+      "ricorrenza": "Natale",
+      "presentazione": "Per questa festivita MAssimo propone: volgole veraci , baccala' e orata",
+      "ritiro_data": "2026-11-02"
     }
   ],
   "ritiro": {
