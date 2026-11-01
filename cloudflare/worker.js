@@ -8,9 +8,21 @@ function rome(now=new Date()){
  return {date:get('year')+'-'+get('month')+'-'+get('day'),time:get('hour')+':'+get('minute')};
 }
 function addDays(date,n){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+function festaAperta(c,now){
+ const current=rome(now);
+ return c.id==='natale'&&c.attiva!==false&&c.periodo?.dal&&c.periodo?.al&&current.date>=c.periodo.dal&&current.date<=c.periodo.al;
+}
+function validDay(d){return typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d+'T12:00:00Z'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;}
+function festaScadenza(c){
+ if(!c.scadenza_data&&!c.scadenza_ora)return null;
+ if(!validDay(c.scadenza_data)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(c.scadenza_ora||''))fail('Scadenza della festività da verificare con la pescheria.',503);
+ return {date:c.scadenza_data,time:c.scadenza_ora};
+}
 function pickupDays(menu,now){
  const today=rome(now).date;
- return Array.from({length:14},(_,i)=>addDays(today,i)).filter(d=>new Date(d+'T12:00:00Z').getUTCDay()!==1 && !(menu.ritiro?.chiusure||[]).includes(d));
+ const days=Array.from({length:14},(_,i)=>addDays(today,i)).filter(d=>new Date(d+'T12:00:00Z').getUTCDay()!==1 && !(menu.ritiro?.chiusure||[]).includes(d));
+ for(const c of menu.categorie||[])if(festaAperta(c,now)&&validDay(c.ritiro_data)&&c.ritiro_data>=today&&!(menu.ritiro?.chiusure||[]).includes(c.ritiro_data))days.push(c.ritiro_data);
+ return [...new Set(days)].sort();
 }
 async function readMenu(){
  const r=await fetch(MENU_URL,{cache:'no-store',signal:AbortSignal.timeout(10000)});
@@ -60,18 +72,22 @@ function priceOrder(order,menu,now=new Date()){
   const category=menu.categorie.find(c=>c.voci.some(v=>v.id===item.id));
   const v=category?.voci.find(v=>v.id===item.id);
   if(!v || !v.disponibile || ['esaurito','terminato'].includes(v.stato))fail('Un prodotto non è più disponibile. Aggiorna il menu.',409);
+  if(category.attiva===false)fail('Proposta non pubblicata',409);
+  if(category.id==='natale'&&category.ritiro_data&&order.pickup_date!==category.ritiro_data)fail('I piatti della festività si ritirano il '+category.ritiro_data+'. Seleziona questa data.');
+  const regularDays=pickupDays({...menu,categorie:[]},now);
+  if(!regularDays.includes(order.pickup_date)&&category.id!=='natale')fail('Per questa data speciale puoi ordinare solo i piatti della festività.');
   if(category.periodo && (!category.periodo.dal || !category.periodo.al || current.date<category.periodo.dal || current.date>category.periodo.al))fail('Prodotto fuori periodo',409);
   const allowed=v.preparazioni||[];if(item.preparation && !allowed.includes(item.preparation))fail('Preparazione non disponibile per '+v.nome);
   if(allowed.length && !item.preparation)fail('Scegli la preparazione per '+v.nome);
   const step=v.unita==='kg'?.5:1;
   if(Math.abs(item.quantity/step-Math.round(item.quantity/step))>1e-8)fail('Quantità non valida per '+v.nome);
   if(typeof v.prezzo!=='number'||!Number.isFinite(v.prezzo)||v.prezzo<0)fail('Prezzo da verificare',503);
-  const limit=deadline(v.ordini_entro||category.ordini_entro||menu.ritiro?.ordini_entro,order.pickup_date);
+  const limit=(category.id==='natale'?festaScadenza(category):null)||deadline(v.ordini_entro||category.ordini_entro||menu.ritiro?.ordini_entro,order.pickup_date);
   if(limit && (current.date>limit.date || (current.date===limit.date && current.time>limit.time)))fail('Termine ordini superato per '+v.nome+'. Scegli un altro giorno.');
   evening ||= !!v.su_ordinazione;
   const unit_price_cents=Math.round(v.prezzo*100),line_total_cents=Math.round(unit_price_cents*item.quantity);
   total+=line_total_cents;
-  return {...item,name:v.nome,unit:v.unita||'porzioni',unit_price_cents,line_total_cents};
+  return {...item,...(category.id==='natale'?{occasion:category.ricorrenza||category.nome}:{}),name:v.nome,unit:v.unita||'porzioni',unit_price_cents,line_total_cents};
  });
  const hours=evening?(menu.ritiro?.orari_sera||['18:30','19:00','19:30','20:00']):HOURS;
  if(!hours.includes(order.pickup_time))fail('Orario di ritiro non disponibile');
@@ -106,7 +122,7 @@ async function publicApi(request,env){
  try{
   if(!env.db || typeof env.ADMIN_TOKEN!=='string' || env.ADMIN_TOKEN.length<20)fail('Ordini online non ancora configurati',503);
   if(url.pathname==='/api/config' && request.method==='GET'){
-   const menu=await readMenu();return respond({ok:true,menu,preparations_supported:true,days:pickupDays(menu,new Date())});
+   const menu=await readMenu();return respond({ok:true,menu,preparations_supported:true,festivities_supported:true,days:pickupDays(menu,new Date())});
   }
   if(url.pathname!=='/api/submit' || request.method!=='POST')return respond({errore:'Operazione non disponibile'},404);
   if(!origin)fail('Invia l’ordine dal sito della pescheria',403);
@@ -312,7 +328,7 @@ async function load(){
   card.append(element("h2",o.customer_name+" · "+money(o.total_cents)),element("small","Codice: "+o.id),element("p","Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time),element("p","Cellulare: "+o.customer_phone));
   if(o.notes)card.append(element("p","Note: "+o.notes));
   const list=element("ul","");
-  for(const item of o.items)list.append(element("li",(item.quantity??item.qta??"")+" "+(item.unit??item.unita??"")+" · "+(item.name??item.nome??item.id??"Prodotto")+(item.preparation?" · "+item.preparation:"")));
+  for(const item of o.items)list.append(element("li",(item.quantity??item.qta??"")+" "+(item.unit??item.unita??"")+" · "+(item.name??item.nome??item.id??"Prodotto")+(item.preparation?" · "+item.preparation:"")+(item.occasion?" · "+item.occasion:"")));
   card.append(list);
   const paid=element("input","");paid.type="checkbox";paid.checked=!!o.paid;
   paid.hidden=true;card.append(paid);
