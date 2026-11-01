@@ -60,10 +60,10 @@
           "id": "spigola",
           "nome_scientifico": "",
           "zona_fao": "",
-          "metodo": "",
+          "metodo": "pescato",
           "provenienza": "",
           "data_arrivo": "",
-          "attrezzo": "",
+          "attrezzo": "rete a strascico",
           "allergeni": "",
           "nome": "Spigola",
           "descrizione": "Prezzo di esempio, da verificare con la pescheria.",
@@ -76,7 +76,35 @@
             "Pulito",
             "Sfilettato"
           ],
-          "foto_didascalia": "Immagine indicativa"
+          "foto_didascalia": "Immagine indicativa",
+          "stato_prodotto": "Fresco",
+          "lotto_fornitore": "ac",
+          "paese_origine": "oceano",
+          "consiglio": "fatto al sugo con ponodori",
+          "archivio_arrivi": [
+            {
+              "id": "c058cf50-4b3f-441b-b82b-228d31f17039",
+              "registrato_il": "2026-11-01T14:41:54.621Z",
+              "dati": {
+                "nome": "Spigola",
+                "lotto_fornitore": "ac",
+                "nome_scientifico": "",
+                "paese_origine": "oceano",
+                "zona_fao": "",
+                "metodo": "pescato",
+                "provenienza": "",
+                "data_pesca": "",
+                "data_arrivo": "",
+                "ora_arrivo": "",
+                "attrezzo": "rete a strascico",
+                "stato_prodotto": "Fresco",
+                "condizione": "",
+                "data_congelamento": "",
+                "glassatura": "",
+                "allergeni": ""
+              }
+            }
+          ]
         },
         {
           "id": "orata",
@@ -235,10 +263,10 @@
           "allergeni": "",
           "disponibile": false,
           "stato": "disponibile",
-          "in_evidenza": true,
           "preparazioni": [
             "A tranci"
-          ]
+          ],
+          "in_evidenza": true
         }
       ]
     },
