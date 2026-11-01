@@ -213,7 +213,7 @@ function scelteVoce(v,q){
  </div>`;
 }
 function scegliPeso(id,q){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce))return;carrello[id]={voce,qta:q,preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||""};aggiornaOrari();render();}
-function scegliPreparazione(id,value){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||!voce.preparazioni?.includes(value))return;if(!carrello[id])carrello[id]={voce,qta:voce.unita==="kg"?.5:1};carrello[id].preparazione=value;aggiornaOrari();render();}
+function scegliPreparazione(id,value){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||![...new Set([...(voce.preparazioni||[]),"Pulito","Sfilettato"])].includes(value))return;if(!carrello[id])carrello[id]={voce,qta:voce.unita==="kg"?.5:1};carrello[id].preparazione=value;aggiornaOrari();render();}
 
 // Una categoria con periodo compare solo nelle date impostate; senza date resta nascosta
 function categoriaAttiva(c) {
