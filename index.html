@@ -91,11 +91,11 @@
     <label for="ora">Orario</label>
     <select id="ora"></select>
     <label for="nome">Il tuo nome</label>
-    <input id="nome" type="text" placeholder="Es. Rossi" autocomplete="name">
-    <label for="cellulare">Il tuo cellulare (facoltativo)</label>
-    <input id="cellulare" type="tel" inputmode="tel" placeholder="Es. 333 1234567" autocomplete="tel">
+    <input id="nome" maxlength="100" type="text" placeholder="Es. Rossi" autocomplete="name">
+    <label for="cellulare">Il tuo cellulare</label>
+    <input id="cellulare" maxlength="30" type="tel" inputmode="tel" placeholder="Es. 333 1234567" autocomplete="tel">
     <label for="note">Note (facoltative)</label>
-    <textarea id="note" placeholder="Es. pulire il pesce, taglio a tranci..."></textarea>
+    <textarea maxlength="2000" id="note" placeholder="Es. pulire il pesce, taglio a tranci..."></textarea>
   </div>
 
   <h2>Come funziona</h2>
@@ -103,7 +103,7 @@
     <ol>
       <li>Scegli i prodotti e le quantità.</li>
       <li>Scegli giorno e orario di ritiro.</li>
-      <li>Invia l'ordine su WhatsApp: ti rispondiamo per confermare.</li>
+      <li>Controlla il riepilogo e premi Invia ordine. L’ordine resta in attesa di conferma della pescheria.</li>
       <li>Ritiri in pescheria e paghi al banco.</li>
     </ol>
   </div>
@@ -120,8 +120,11 @@
   <div class="foglio">
     <h3>Riepilogo ordine</h3>
     <div class="riepilogo" id="testo"></div>
+    <p id="invioStato" role="status" aria-live="polite">Collegamento ordini in corso…</p>
+    <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Lascia vuoto<input id="website" tabindex="-1" autocomplete="off"></label></div>
+    <div class="azioni"><button class="wa" id="inviaOrdine" disabled>Invia ordine</button><button class="copia" id="nuovoOrdine" hidden>Nuovo ordine</button></div>
     <div class="azioni">
-      <a class="wa" id="linkWa" href="#" target="_blank" rel="noopener">Invia su WhatsApp</a>
+      <a class="wa" id="linkWa" href="#" target="_blank" rel="noopener">Solo WhatsApp (non archiviato)</a>
       <button class="copia" id="copia">Copia</button>
     </div>
     <button class="chiudi" id="chiudi">Chiudi</button>
@@ -139,6 +142,8 @@ const GIORNO_CHIUSO = 1;                // 0 = domenica, 1 = lunedì (chiuso)
 const ORARI = ["09:00","09:30","10:00","10:30","11:00","11:30","12:00","17:00","17:30","18:00","18:30","19:00"];
 const ORARI_SERA = ["18:30","19:00","19:30","20:00"]; // ritiro serale per la frittura (riserva)
 
+const API_ORDINI = "https://pescheria-massimo-api.ermestrerm.workers.dev";
+let apiPronta=false, invioInCorso=false, riepilogoInviato=false;
 // ---- STATO ----
 let menu = null;
 const carrello = {}; // id -> { voce, qta }
@@ -234,7 +239,7 @@ function aggiornaOrari() {
 }
 
 function totale() {
-  return Object.values(carrello).reduce((s, r) => s + r.voce.prezzo * r.qta, 0);
+  return Object.values(carrello).reduce((s, r) => s + Math.round(Math.round(r.voce.prezzo * 100) * r.qta), 0) / 100;
 }
 
 function aggiornaTotali() {
@@ -252,9 +257,9 @@ function riempiRitiro() {
     const d = new Date(oggi); d.setDate(oggi.getDate() + i);
     if (d.getDay() === GIORNO_CHIUSO) continue;
     const nome = d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
-    giorni.push(nome.charAt(0).toUpperCase() + nome.slice(1));
+    giorni.push({date:d.toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"}),label:nome.charAt(0).toUpperCase() + nome.slice(1)});
   }
-  document.getElementById("giorno").innerHTML = giorni.map(g => `<option>${g}</option>`).join("");
+  document.getElementById("giorno").innerHTML = giorni.map(g => `<option value="${g.date}">${g.label}</option>`).join("");
   document.getElementById("ora").innerHTML = ORARI.map(o => `<option>${o}</option>`).join("");
 }
 
@@ -268,7 +273,8 @@ function testoOrdine() {
   });
   const nome = document.getElementById("nome").value.trim() || "(senza nome)";
   const cell = document.getElementById("cellulare").value.replace(/\s+/g, "");
-  const giorno = document.getElementById("giorno").value;
+  const selGiorno = document.getElementById("giorno");
+  const giorno = selGiorno.selectedOptions?.[0]?.textContent || selGiorno.value;
   const ora = document.getElementById("ora").value;
   const note = document.getElementById("note").value.trim();
   let t = `Ordine Pescheria da Massimo\nNome: ${nome}${cell ? `\nCellulare: ${cell}` : ""}\nRitiro: ${giorno} alle ${ora}\n\n${righe.join("\n")}\n\nTotale indicativo: ${fmt(totale())}`;
@@ -280,15 +286,69 @@ function testoOrdine() {
 }
 
 document.getElementById("ordina").addEventListener("click", () => {
+  riepilogoInviato=false;
+  document.getElementById("inviaOrdine").disabled=!apiPronta;
+  document.getElementById("inviaOrdine").hidden=false;
+  document.getElementById("nuovoOrdine").hidden=true;
+  document.getElementById("invioStato").textContent=apiPronta?"Controlla i dati. L’ordine sarà registrato premendo Invia ordine.":"Invio automatico non disponibile. Puoi contattare la pescheria su WhatsApp.";
   const t = testoOrdine();
   document.getElementById("testo").textContent = t;
   document.getElementById("linkWa").href = `https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(t)}`;
   document.getElementById("modale").classList.add("aperta");
 });
-document.getElementById("chiudi").addEventListener("click", () => document.getElementById("modale").classList.remove("aperta"));
+document.getElementById("chiudi").addEventListener("click", () => {if(!invioInCorso)document.getElementById("modale").classList.remove("aperta");});
 document.getElementById("copia").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(testoOrdine()); document.getElementById("copia").textContent = "Copiato"; }
   catch (e) { document.getElementById("copia").textContent = "Seleziona e copia"; }
+});
+
+
+// Salvataggio centrale. Nessuna chiave amministratore è presente nel sito clienti.
+async function collegaOrdini(){
+ try{
+  const response=await fetch(API_ORDINI+"/api/config",{cache:"no-store",signal:AbortSignal.timeout(15000)});
+  const config=await response.json();
+  if(!response.ok || !config.ok)throw new Error(config.errore||"Servizio non disponibile");
+  menu=config.menu;
+  const sel=document.getElementById("giorno"),previous=sel.value;
+  sel.replaceChildren();
+  for(const date of config.days){const opt=document.createElement("option");opt.value=date;opt.textContent=new Date(date+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});sel.append(opt);}
+  if(config.days.includes(previous))sel.value=previous;
+  apiPronta=true;aggiornaOrari();render();
+  document.getElementById("invioStato").textContent="Invio automatico disponibile.";
+  document.getElementById("inviaOrdine").disabled=false;
+  document.getElementById("linkWa").textContent="WhatsApp (facoltativo)";
+ }catch(e){
+  apiPronta=false;
+  document.getElementById("invioStato").textContent="Invio automatico non disponibile. Gli ordini inviati solo su WhatsApp non vengono archiviati automaticamente.";
+ }
+}
+document.getElementById("inviaOrdine").addEventListener("click",async()=>{
+ if(invioInCorso || riepilogoInviato || !apiPronta)return;
+ const status=document.getElementById("invioStato"),button=document.getElementById("inviaOrdine");
+ const name=document.getElementById("nome").value.trim(),phone=document.getElementById("cellulare").value.replace(/\s/g,"");
+ if(!name || !/^\+?[0-9]{6,15}$/.test(phone)){status.textContent="Inserisci nome e un numero di cellulare valido prima di inviare.";return;}
+ testoOrdine();
+ const body={id:ultimoOrdine.codice,customer_name:name,customer_phone:phone,pickup_date:document.getElementById("giorno").value,pickup_time:document.getElementById("ora").value,notes:document.getElementById("note").value.trim(),items:Object.values(carrello).map(r=>({id:r.voce.id,quantity:r.qta})).sort((a,b)=>a.id.localeCompare(b.id)),expected_total_cents:Object.values(carrello).reduce((sum,r)=>sum+Math.round(Math.round(r.voce.prezzo*100)*r.qta),0),website:document.getElementById("website").value};
+ invioInCorso=true;button.disabled=true;document.getElementById("chiudi").disabled=true;status.textContent="Invio in corso…";
+ try{
+  const identity=JSON.stringify({...body,id:undefined});
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(identity));
+  const signature=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,"0")).join("");
+  try{const saved=JSON.parse(sessionStorage.getItem("pm_online_attempt")||"null");if(saved?.signature===signature)body.id=saved.id;sessionStorage.setItem("pm_online_attempt",JSON.stringify({signature,id:body.id}));}catch{}
+  ultimoOrdine.codice=body.id;
+  const response=await fetch(API_ORDINI+"/api/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
+  const data=await response.json();
+  if(!response.ok || !data.ok)throw new Error(data.errore||"Ordine non registrato");
+  riepilogoInviato=true;button.hidden=true;document.getElementById("nuovoOrdine").hidden=false;
+  status.textContent="Ordine ricevuto! Codice: "+data.id+". Totale indicativo: "+fmt(data.total_cents/100)+". In attesa di conferma della pescheria. Non occorre inviarlo anche su WhatsApp.";
+  const text=testoOrdine();document.getElementById("testo").textContent=text;document.getElementById("linkWa").href=`https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(text)}`;
+ }catch(e){status.textContent=(e.name==="TimeoutError"||e.name==="TypeError")?"Non abbiamo ricevuto la conferma. Premi di nuovo Invia ordine senza modificare i dati: lo stesso codice evita duplicati.":e.message;button.disabled=false;}
+ finally{invioInCorso=false;document.getElementById("chiudi").disabled=false;}
+});
+document.getElementById("nuovoOrdine").addEventListener("click",()=>{
+ try{sessionStorage.removeItem("pm_online_attempt");}catch{}
+ ultimoOrdine={firma:"",codice:""};for(const id of Object.keys(carrello))delete carrello[id];riepilogoInviato=false;document.getElementById("modale").classList.remove("aperta");aggiornaOrari();render();
 });
 
 // ---- CARTA DEL PESCE ----
@@ -336,6 +396,7 @@ fetch("menu.json", { cache: "no-store" })
     aggiornaOrari();
     if (menu.ritiro && menu.ritiro.ordini_entro) document.getElementById("entro").textContent = menu.ritiro.ordini_entro;
     render();
+    collegaOrdini();
   })
   .catch(() => {
     document.getElementById("errore").innerHTML = `<div class="errore">Il menu non si è caricato. Riprova tra poco.</div>`;
