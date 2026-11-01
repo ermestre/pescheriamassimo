@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="menu-restored-20261101">
+<meta name="pm-release" content="schede-pesce-20261101">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Pescheria da Massimo</title>
 <style>
@@ -52,7 +52,7 @@
   .carta-dati dt { color: var(--grigio); }
   .carta-dati dd { margin: 0; font-weight: 600; }
   .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
-  .consiglio p { margin: 4px 0 0; }
+  .consiglio p { margin: 4px 0 0; white-space:pre-wrap; }
   .miniatura { width: 100%; max-height: 160px; object-fit: contain; background:#fff; border-radius: 8px; margin-bottom: 8px; }
 </style>
 </head>
@@ -302,10 +302,12 @@ async function salva() {
   if (!dati) return;
   messaggio("Salvataggio in corso…", "info");
   try {
+    registraArrivi();
     const testo = JSON.stringify(dati, null, 2) + "\n";
     const r = await api("PUT", { message: "Aggiorna menu", content: codifica(testo), sha: sha, branch: BRANCH });
     sha = r.content.sha;
     sporco = false;
+    mostraEditor();
     messaggio("Modifiche salvate. Il sito si aggiorna in 1-2 minuti.", "ok");
   } catch (e) {
     messaggio("Salvataggio non riuscito: " + e.message, "err");
@@ -417,13 +419,16 @@ function voceHtml(ci, vi, v) {
       <details>
         <summary>Preparazioni disponibili</summary>
         <p class="piccolo">Attiva solo i servizi confermati da Massimo. Nessun supplemento viene aggiunto automaticamente. Se tutti i campi sono vuoti il cliente non vede questa scelta.</p>
-        ${["Intero","Pulito","Sfilettato","A filetti"].map(x=>`<label class="check"><input type="checkbox" ${(v.preparazioni||[]).includes(x)?"checked":""} onchange="aggiornaPreparazioni(${ci},${vi},'${x}',this.checked)"> ${x}</label>`).join("")}
+        ${["Intero","Pulito","Sfilettato","Sgusciato","A tranci","Già sgusciato","A filetti"].map(x=>`<label class="check"><input type="checkbox" ${(v.preparazioni||[]).includes(x)?"checked":""} onchange="aggiornaPreparazioni(${ci},${vi},'${x}',this.checked)"> ${x}</label>`).join("")}
       </details>
       <details>
         <summary>Scheda del pesce e tracciabilità</summary>
-        <p class="piccolo">Lascia vuoto ciò che non sai: non viene mostrato al cliente.</p>
+        <p class="piccolo">Compila dai documenti del fornitore. Questi dati sono pubblici nella scheda del prodotto. Lascia vuoto ciò che non sai. Lotto e zona FAO sono informazioni diverse.</p>
         <div class="campi">
           <div><label>Stato del prodotto (da etichetta)</label><select onchange="aggiornaCampo(${ci},${vi},'stato_prodotto',this.value)">${["","Fresco","Decongelato","Congelato","Surgelato"].map(x=>`<option value="${x}" ${v.stato_prodotto===x?"selected":""}>${x||"Da compilare"}</option>`).join("")}</select></div>
+          ${campoTesto(ci, vi, "lotto_fornitore", "Lotto originale del fornitore", v)}
+          ${campoTesto(ci, vi, "paese_origine", "Paese di origine dichiarato", v)}
+          ${campoTesto(ci, vi, "data_pesca", "Data di pesca (solo se documentata)", v)}
           ${campoTesto(ci, vi, "nome_scientifico", "Nome scientifico", v)}
           ${campoLista(ci, vi, "zona_fao", "Zona FAO / paese", v,"lista-zone")}
           ${campoLista(ci, vi, "metodo", "Produzione: pescato / allevato (da etichetta)", v,"lista-metodo")}
@@ -438,15 +443,34 @@ function voceHtml(ci, vi, v) {
           ${campoTesto(ci, vi, "porzione", "Porzione (es. 300 g)", v)}
         </div>
         <div class="campi uno" style="margin-top:8px">
-          <div><label>Consiglio di cottura di Massimo</label><textarea rows="3" onchange="aggiornaCampo(${ci},${vi},'consiglio',this.value)">${esc(v.consiglio||"")}</textarea></div>
+          <div><label>Il consiglio di Massimo: come cucinarlo</label><textarea placeholder="Es. In padella con due pomodorini e aglio (scrivi il consiglio concordato con Massimo)" rows="4" onchange="aggiornaCampo(${ci},${vi},'consiglio',this.value)">${esc(v.consiglio||"")}</textarea></div>
         </div>
       </details>
+      ${archivioArriviHtml(v)}
       <button class="elimina" onclick="eliminaVoce(${ci},${vi})">Elimina voce</button>
     </div>`;
 }
 
+
+// Archivio pubblico dei soli dati di provenienza: nessuna fattura o dato personale.
+const CAMPI_ARRIVO=['nome','lotto_fornitore','nome_scientifico','paese_origine','zona_fao','metodo','provenienza','data_pesca','data_arrivo','ora_arrivo','attrezzo','stato_prodotto','condizione','data_congelamento','glassatura','allergeni'];
+function registraArrivi(){
+ for(const v of tutteLeVoci()){
+  if(!v.lotto_fornitore?.trim())continue;
+  const snapshot=Object.fromEntries(CAMPI_ARRIVO.map(k=>[k,String(v[k]||'').trim()]));
+  const history=v.archivio_arrivi||[];
+  const previous=history.at(-1);
+  if(previous && JSON.stringify(previous.dati)===JSON.stringify(snapshot))continue;
+  v.archivio_arrivi=[...history,{id:crypto.randomUUID(),registrato_il:new Date().toISOString(),dati:snapshot}];
+ }
+}
+function archivioArriviHtml(v){
+ const history=v.archivio_arrivi||[];
+ return `<details><summary>Archivio arrivi e lotti (${history.length})</summary><p class="piccolo">Quando salvi un lotto o modifichi i suoi dati, viene conservata una copia. Le copie precedenti non sono modificabili da questa pagina. Non è un collegamento a un registro esterno.</p>${history.map(row=>`<details><summary>${esc(row.dati.lotto_fornitore)} · arrivo ${esc(row.dati.data_arrivo||'non indicato')}</summary><dl class="carta-dati">${CAMPI_ARRIVO.filter(k=>row.dati[k]).map(k=>`<dt>${esc(k.replaceAll('_',' '))}</dt><dd>${esc(row.dati[k])}</dd>`).join('')}</dl></details>`).join('')}</details>`;
+}
+
 // ---- MODIFICHE AI DATI ----
-function aggiornaPreparazioni(ci,vi,value,checked){const v=dati.categorie[ci].voci[vi];const values=new Set(v.preparazioni||[]);if(checked)values.add(value);else values.delete(value);v.preparazioni=["Intero","Pulito","Sfilettato","A filetti"].filter(x=>values.has(x));segna();}
+function aggiornaPreparazioni(ci,vi,value,checked){const v=dati.categorie[ci].voci[vi];const values=new Set(v.preparazioni||[]);if(checked)values.add(value);else values.delete(value);v.preparazioni=["Intero","Pulito","Sfilettato","Sgusciato","A tranci","Già sgusciato","A filetti"].filter(x=>values.has(x));segna();}
 function aggiornaCampo(ci, vi, k, val) { dati.categorie[ci].voci[vi][k] = val.trim(); segna(); }
 function aggiornaPrezzo(ci, vi, val) { dati.categorie[ci].voci[vi].prezzo = Number(val) || 0; segna(); }
 function aggiornaUnita(ci, vi, val) { dati.categorie[ci].voci[vi].unita = val || null; segna(); }
@@ -470,6 +494,7 @@ function leggiTestate() {
 
 function eliminaVoce(ci, vi) {
   const v = dati.categorie[ci].voci[vi];
+  if(v.archivio_arrivi?.length||v.lotto_fornitore){messaggio("Questo prodotto ha dati di lotto: scegli Terminato per nasconderlo conservando lo storico.","info");return;}
   if (!confirm(`Eliminare "${v.nome}" dal menu?`)) return;
   leggiTestate();
   dati.categorie[ci].voci.splice(vi, 1);
@@ -584,6 +609,9 @@ async function caricaFoto(ci, vi, input) {
 function anteprima(ci, vi) {
   const v = dati.categorie[ci].voci[vi];
   const righe = [];
+  if(v.lotto_fornitore)righe.push(["Lotto del fornitore",esc(v.lotto_fornitore)]);
+  if(v.paese_origine)righe.push(["Paese di origine",esc(v.paese_origine)]);
+  if(v.data_pesca)righe.push(["Data di pesca dichiarata",esc(v.data_pesca)]);
   if (v.stato_prodotto||v.condizione) righe.push(["Stato del prodotto",esc(v.stato_prodotto||v.condizione)]);
   if (v.glassatura) righe.push(["Glassatura",esc(v.glassatura)+" %"]);
   if (v.data_congelamento) righe.push(["Data di congelamento",esc(v.data_congelamento)]);
