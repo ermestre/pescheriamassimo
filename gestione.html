@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="schede-pesce-20261101">
+<meta name="pm-release" content="festivita-20261101">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Pescheria da Massimo</title>
 <style>
@@ -77,7 +77,7 @@
     <nav class="schede">
       <button data-scheda-btn="menu" class="attiva">Menu</button>
       <button data-scheda-btn="pesce">Pesce del giorno</button>
-      <button data-scheda-btn="natale">Natale</button>
+      <button data-scheda-btn="natale">Festività</button>
     </nav>
 
     <!-- SCHEDA MENU -->
@@ -151,8 +151,8 @@
     <!-- SCHEDA NATALE -->
     <div data-scheda="natale" class="nascosto">
       <section>
-        <h2>Specialità di Natale</h2>
-        <p class="aiuto">Le proposte compaiono sul sito solo nelle date che imposti qui sotto. Fuori dalle date, la sezione è nascosta.</p>
+        <h2>Menu delle festività</h2>
+        <p class="aiuto">Scegli la ricorrenza e prepara i piatti dedicati, con prezzi e quantità ordinabili. Puoi tenere la sezione in bozza e pubblicarla solo nel periodo scelto. Una ricorrenza alla volta; cambiare festa non cancella i piatti, che puoi modificare.</p>
         <div id="natale"></div>
       </section>
     </div>
@@ -302,6 +302,7 @@ async function salva() {
   if (!dati) return;
   messaggio("Salvataggio in corso…", "info");
   try {
+    validaFestivita();
     registraArrivi();
     const testo = JSON.stringify(dati, null, 2) + "\n";
     const r = await api("PUT", { message: "Aggiorna menu", content: codifica(testo), sha: sha, branch: BRANCH });
@@ -344,11 +345,41 @@ function mostraEditor() {
   // menu (senza Natale) e Natale
   $("categorie").innerHTML = dati.categorie.filter(c => c.id !== "natale").map(c => bloccoCategoria(c)).join("");
   const natale = dati.categorie.map((c, ci) => ({ c, ci })).find(x => x.c.id === "natale");
-  $("natale").innerHTML = natale ? bloccoCategoria(natale.c, natale.ci) : "<p class='aiuto'>Categoria Natale non trovata nel menu.</p>";
+  if(natale)natale.c.attiva ??= Boolean(natale.c.periodo?.dal&&natale.c.periodo?.al);
+  $("natale").innerHTML = natale ? festivitaHtml(natale.c, natale.ci) : "<p class='aiuto'>Sezione festività non trovata nel menu.</p>";
 
   // categorie per nuova voce e catalogo
   $("nuovaCat").innerHTML = dati.categorie.map((c, ci) => `<option value="${ci}">${esc(c.nome)}</option>`).join("");
   $("catalogo").innerHTML = CATALOGO.map((s, i) => `<option value="${i}">${esc(s.nome)} (${esc(s.scientifico)})</option>`).join("");
+}
+
+function festivitaHtml(c,ci){
+ const ricorrenze=['Natale','Capodanno','Pasqua','Ferragosto','Altra ricorrenza'];
+ return `<label><input type="checkbox" ${c.attiva===true?'checked':''} onchange="aggiornaFesta(${ci},'attiva',this.checked)"> Pubblica il menu della festività</label>
+ <p class="piccolo">Senza questa spunta resta una bozza. Compila le date prima di pubblicare. Gli orari di ritiro restano quelli del menu ordinario.</p>
+ <div class="campi"><div><label>Ricorrenza</label><select onchange="scegliFesta(${ci},this.value)">${ricorrenze.map(x=>`<option ${x===(c.ricorrenza||'Natale')?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
+ <div><label>Titolo visibile ai clienti</label><input value="${esc(c.nome)}" onchange="aggiornaFesta(${ci},'nome',this.value)"></div></div>
+ <label>Presentazione del menu</label><textarea onchange="aggiornaFesta(${ci},'presentazione',this.value)">${esc(c.presentazione||'')}</textarea>
+ <div class="campi"><div><label>Visibile dal</label><input type="date" value="${esc(c.periodo?.dal||'')}" onchange="aggiornaPeriodo(${ci},'dal',this.value)"></div>
+ <div><label>Visibile fino al</label><input type="date" value="${esc(c.periodo?.al||'')}" onchange="aggiornaPeriodo(${ci},'al',this.value)"></div>
+ <div><label>Giorno di ritiro della festività</label><input type="date" value="${esc(c.ritiro_data||'')}" onchange="aggiornaFesta(${ci},'ritiro_data',this.value)"></div>
+ <div><label>Chiudi prenotazioni il (facoltativo)</label><input type="date" value="${esc(c.scadenza_data||'')}" onchange="aggiornaFesta(${ci},'scadenza_data',this.value)"></div>
+ <div><label>Ora chiusura prenotazioni</label><input type="time" value="${esc(c.scadenza_ora||'')}" onchange="aggiornaFesta(${ci},'scadenza_ora',this.value)"></div></div>
+ <p class="piccolo">Se non imposti una scadenza precisa, valgono i termini ordinari del menu. Le date e gli orari usano l'ora italiana. Nessuna prenotazione o piatto viene pubblicato automaticamente.</p>
+ <button type="button" onclick="aggiungiFestivo(${ci})">Aggiungi piatto per questa festa</button>
+ <p class="piccolo">Il nuovo piatto parte non in vendita: imposta nome, prezzo, porzione e disponibilità, poi salva.</p>
+ ${c.voci.map((v,vi)=>voceHtml(ci,vi,v)).join('')}`;
+}
+function aggiornaFesta(ci,k,value){dati.categorie[ci][k]=typeof value==='string'?value.trim():value;segna();}
+function scegliFesta(ci,value){leggiTestate();aggiornaFesta(ci,'ricorrenza',value);dati.categorie[ci].nome=value==='Altra ricorrenza'?'Menu della festa':'Menu di '+value;mostraEditor();}
+function aggiungiFestivo(ci){leggiTestate();dati.categorie[ci].voci.push({id:slugNome('festa'),nome:'Nuovo piatto della festa',descrizione:'',prezzo:0,unita:'porzioni',disponibile:false,stato:'disponibile'});segna();mostraEditor();}
+function validaFestivita(){
+ for(const c of dati.categorie.filter(c=>c.id==='natale'&&c.attiva===true)){
+  const valid=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')&&!Number.isNaN(Date.parse(d+'T12:00:00Z'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
+  if(!c.nome?.trim()||!valid(c.periodo?.dal)||!valid(c.periodo?.al)||c.periodo.dal>c.periodo.al||!valid(c.ritiro_data))throw new Error('Festività: compila titolo, periodo valido e giorno di ritiro, oppure togli Pubblica per salvare una bozza.');
+  if(c.periodo.al>c.ritiro_data)throw new Error('Festività: la visibilità non può finire dopo il giorno di ritiro.');
+  if(c.scadenza_data||c.scadenza_ora){if(!valid(c.scadenza_data)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(c.scadenza_ora||'')||c.scadenza_data>c.ritiro_data)throw new Error('Festività: controlla data e ora di chiusura prenotazioni.');}
+ }
 }
 
 // Blocco di una categoria: per Natale mostra anche le date e il termine ordini
@@ -475,7 +506,7 @@ function aggiornaCampo(ci, vi, k, val) { dati.categorie[ci].voci[vi][k] = val.tr
 function aggiornaPrezzo(ci, vi, val) { dati.categorie[ci].voci[vi].prezzo = Number(val) || 0; segna(); }
 function aggiornaUnita(ci, vi, val) { dati.categorie[ci].voci[vi].unita = val || null; segna(); }
 function aggiornaDisponibile(ci, vi, val) { dati.categorie[ci].voci[vi].disponibile = val; segna(); }
-function aggiornaPeriodo(ci, k, val) { dati.categorie[ci].periodo[k] = val; segna(); }
+function aggiornaPeriodo(ci, k, val) { dati.categorie[ci].periodo ||= {dal:"",al:""}; dati.categorie[ci].periodo[k] = val; segna(); }
 function aggiornaCampoCat(ci, k, val) { dati.categorie[ci][k] = val.trim(); segna(); }
 
 function leggiTestate() {

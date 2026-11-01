@@ -1,0 +1,17 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const code=fs.readFileSync(new URL('../cloudflare/worker.js',import.meta.url),'utf8');
+const {priceOrder,pickupDays}=await import('data:text/javascript;base64,'+Buffer.from(code+'\nexport {priceOrder,pickupDays};').toString('base64'));
+const menu=JSON.parse(fs.readFileSync(new URL('../menu.json',import.meta.url),'utf8'));
+const fest=menu.categorie.find(c=>c.id==='natale');Object.assign(fest,{attiva:true,ricorrenza:'Natale',periodo:{dal:'2026-11-01',al:'2026-12-24'},ritiro_data:'2026-12-24',scadenza_data:'2026-12-20',scadenza_ora:'18:00',voci:[{id:'festa-test',nome:'Piatto festa',disponibile:true,prezzo:25,unita:'porzioni'}]});
+const now=new Date('2026-11-01T10:00:00Z');
+const order={pickup_date:'2026-12-24',pickup_time:'09:00',total_cents:2500,items:[{id:'festa-test',quantity:1,preparation:''}]};
+assert.ok(pickupDays(menu,now).includes('2026-12-24'));
+assert.equal(priceOrder(order,menu,now).items[0].occasion,'Natale');
+assert.throws(()=>priceOrder({...order,pickup_date:'2026-11-03'},menu,now),/festività/);
+assert.throws(()=>priceOrder(order,menu,new Date('2026-12-20T17:01:00Z')),/Termine ordini/);
+assert.equal(priceOrder(order,menu,new Date('2026-12-20T17:00:00Z')).total_cents,2500);
+assert.throws(()=>priceOrder({...order,items:[{id:'spigola',quantity:1,preparation:'Intero'}],total_cents:2400},menu,now),/solo i piatti/);
+fest.attiva=false;assert.ok(!pickupDays(menu,now).includes('2026-12-24'));assert.throws(()=>priceOrder({...order,pickup_date:'2026-11-03'},menu,now),/non pubblicata/);
+fest.attiva=true;fest.ritiro_data='2026-11-30';assert.ok(pickupDays(menu,now).includes('2026-11-30'));
+menu.ritiro.chiusure=['2026-11-30'];assert.ok(!pickupDays(menu,now).includes('2026-11-30'));
+console.log('OK: ritiro oltre 14 giorni, solo piatti della festa, scadenza italiana, bozze e chiusure rispettate');

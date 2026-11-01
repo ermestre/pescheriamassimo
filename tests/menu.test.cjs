@@ -43,3 +43,18 @@ assert.match(client.run('testoOrdine()'),/Lotto Orata: LOT-TEST-2/);
 for(const v of fish)assert.ok(v.preparazioni?.length,'Preparazione definita per '+v.nome);
 console.log('OK: scheda da foto, consigli, lotto nelle note e archivio arrivi immutabile dalla UI.');
 const beforeDelete=editor.run(`dati.categorie[${ci}].voci.length`);editor.run(`eliminaVoce(${ci},${index})`);assert.equal(editor.run(`dati.categorie[${ci}].voci.length`),beforeDelete,'I prodotti con storico lotti si nascondono senza eliminarli');
+
+// Reusable festivities: drafts, settings, product editor and safe customer intro.
+editor.run('dati='+JSON.stringify(menu));
+const fi=menu.categorie.findIndex(c=>c.id==='natale');
+editor.run(`dati.categorie[${fi}].attiva=true`);
+assert.throws(()=>editor.run('validaFestivita()'),/Festività/);
+editor.run(`Object.assign(dati.categorie[${fi}],{ricorrenza:'Pasqua',nome:'Menu di Pasqua',periodo:{dal:'2027-03-01',al:'2027-03-28'},ritiro_data:'2027-03-28',scadenza_data:'2027-03-26',scadenza_ora:'18:00'})`);
+editor.run('validaFestivita()');
+assert.match(editor.run(`festivitaHtml(dati.categorie[${fi}],${fi})`),/Aggiungi piatto per questa festa/);
+editor.run(`aggiornaFesta(${fi},'scadenza_ora','99:99')`);assert.throws(()=>editor.run('validaFestivita()'),/chiusura/);
+editor.run(`aggiornaFesta(${fi},'attiva',false)`);editor.run('validaFestivita()');
+assert.equal(client.run('categoriaAttiva({attiva:false,periodo:{dal:"2000-01-01",al:"2099-12-31"}})'),false);
+assert.equal(client.run('festaChiusa({scadenza_data:"2000-01-01",scadenza_ora:"18:00"})'),true);
+assert.match(client.run('festaIntro({ricorrenza:"<script>",presentazione:"<img>",ritiro_data:"2026-12-24"})'),/&lt;script&gt;/);
+console.log('OK: festività riutilizzabili, bozze, date e scadenze, editor piatti e testi protetti.');
