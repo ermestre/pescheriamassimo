@@ -195,6 +195,8 @@ export default {
   if(!env.db) return json({errore:"Database non collegato"},503);
   try{
    await env.db.prepare(PAYMENT_SCHEMA).run();
+   await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_order ON payment_events(order_id)").run();
+   await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_day ON payment_events(business_date,created_at)").run();
    const paymentResponse=await paymentApi(request,env,url);if(paymentResponse)return paymentResponse;
    if(url.pathname==="/api/orders" && request.method==="GET"){
     const date=url.searchParams.get("date");
