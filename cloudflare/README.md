@@ -46,3 +46,17 @@ node tests/worker.test.mjs
 Il secondo test esegue il vero handler con SQLite in memoria: invio, retry dopo risposta persa, conflitti, prezzi storici, validazione, autenticazione, CORS e limiti. La rete menu è simulata; nessun ordine reale viene creato dai test. La verifica finale sui servizi pubblicati richiede la prova del punto 4.
 
 Documentazione consultata il 1 novembre 2026: [D1](https://developers.cloudflare.com/d1/worker-api/prepared-statements/), [CORS](https://developers.cloudflare.com/workers/examples/cors-header-proxy/), [Secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
+
+## Menu e preparazioni (1 novembre 2026)
+
+Spigola, Orata, Rombo e Sogliola hanno ID distinti. Prezzi ereditati dalle precedenti voci aggregate solo come esempi, da verificare; nessun nuovo dato di provenienza è stato dedotto. Le foto condivise sono segnalate come indicative. Gli ordini precedenti conservano le loro descrizioni e gli importi salvati.
+
+In gestione.html, Preparazioni disponibili abilita Intero, Pulito e A filetti per ciascun prodotto. Sono servizi da confermare con il titolare; inizialmente le quattro specie separate hanno soltanto Intero. Non è implementato un supplemento economico per la lavorazione. Il peso finale va verificato al banco. La scelta appare nel riepilogo e, con il nuovo Worker distribuito, nell'articolo salvato e nel pannello ordini. Il server rifiuta scelte non presenti nel menu e distingue i tentativi con preparazioni diverse.
+
+Il sito legge preparations_supported da /api/config. Finché è attivo il Worker precedente, conserva la preparazione nelle note dell'ordine; dopo l'aggiornamento la salva nel campo strutturato preparation. L'aggiornamento del Worker va eseguito manualmente come indicato sopra; nessuna migrazione D1 richiesta.
+
+Provenienza, metodo, zona FAO, attrezzo, stato fresco/decongelato/congelato e consiglio sono compilabili dal gestore. I campi vuoti non producono dichiarazioni al cliente. La voce In evidenza non dichiara più Arrivato oggi in assenza di una data verificata. L'avviso generale menu.nota è visibile e modificabile nella gestione.
+
+Il QR statico img/qr-menu.svg apre https://ermestre.github.io/pescheriamassimo/ e si trova nella pagina di gestione. È un QR del menu, non un codice lotto o una certificazione.
+
+Verifiche aggiuntive: node tests/menu.test.cjs. Le verifiche automatiche non sostituiscono una prova visiva e di invio sui servizi pubblicati.
