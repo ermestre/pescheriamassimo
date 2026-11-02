@@ -841,7 +841,8 @@ async function caricaFoto(ci, vi, input) {
   try {
     const blob = await ridimensionaFoto(file, 900);
     const contenuto = await blobInBase64(blob);
-    const percorso = `img/${v.id}.jpg`;
+    // Nome nuovo a ogni foto: telefoni e GitHub Pages non possono mostrare la versione vecchia rimasta in memoria.
+    const percorso = `img/${v.id}-${Date.now().toString(36)}.jpg`;
     const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${percorso}`;
 
     // Se la foto esiste già, serve il suo codice (sha) per sostituirla
@@ -862,7 +863,8 @@ async function caricaFoto(ci, vi, input) {
     v.foto = percorso;
     segna();
     mostraEditor();
-    messaggio("Foto caricata. Premi Salva modifiche per renderla visibile ai clienti.", "ok");
+    if ($("schedaVoceCorpo").dataset.voce === ci + ":" + vi) apriVoce(ci, vi);
+    messaggio("Foto caricata. Ora premi Salva modifiche: i clienti la vedono 2-5 minuti dopo il salvataggio.", "ok");
   } catch (e) {
     messaggio("Foto non caricata: " + e.message, "err");
   }

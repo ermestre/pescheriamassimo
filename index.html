@@ -135,6 +135,7 @@
 .fiducia { padding: 10px 14px 12px; }
 .fiducia .sotto { font-size: 18px; margin-bottom: 6px; }
 .fiducia span { font-size: 12px; padding: 3px 9px; margin: 2px; }
+.fiducia span::before { content: "✓\FE0E  "; color: var(--oro); font-weight: 700; }
 .aggiungi { min-height: 44px; padding: 10px 22px; border: 0; border-radius: 999px; background: var(--oro); color: #2b1d00; font-weight: 700; font-size: 16px; cursor: pointer; }
 .aggiungi:disabled { background: #eef1f3; color: #a3afb8; cursor: default; }
 .foglio h4 { font: 700 18px var(--serif); margin: 22px 0 10px; }
@@ -182,9 +183,9 @@
 <div class="hero" id="hero"></div>
 <div class="fiducia">
   <div class="sotto">Ordina dal telefono, ritira in pescheria</div>
-  <span>✔ Pesce fresco del giorno</span>
-  <span>✔ Ordini entro <b id="entro">18:00 del giorno prima</b></span>
-  <span>✔ Pagamento al ritiro</span>
+  <span>Pesce fresco del giorno</span>
+  <span>Ordini entro <b id="entro">18:00 del giorno prima</b></span>
+  <span>Pagamento al ritiro</span>
 </div>
 <nav class="categorie" id="categorie" aria-label="Sezioni del menu"></nav>
 
