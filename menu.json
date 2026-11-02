@@ -5,6 +5,7 @@
   "indirizzo": "Via di Macchia Saponara 46, Roma",
   "nota": "",
   "foto_insegna": "img/insegna.jpg",
+  "logo": "img/logo-pescheria-1.webp",
   "categorie": [
     {
       "id": "piatti-pronti",

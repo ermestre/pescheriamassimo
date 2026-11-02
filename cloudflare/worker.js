@@ -345,7 +345,7 @@ export default {
  }
 };
 const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1b2f4e">
-<title>Ordini · Pescheria Massimo</title>
+<title>Ordini · Pescheria Massimo</title><link rel="icon" type="image/png" href="https://ermestre.github.io/pescheriamassimo/img/icona-64.png">
 <style>
 :root{--inchiostro:#1b2f4e;--ghiaccio:#e8eff2;--seppia:#efe4d3;--bordo:#c8d4d9;--tenue:#56677a;--nuovo:#e0a526;--nuovo-testo:#7d5400;--confermato:#2c6e9b;--pronto:#2f7d55;--ritirato:#66757d;--annullato:#b0412e;--wa:#1e8a4c;--serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif}
 *{box-sizing:border-box}
@@ -359,8 +359,8 @@ input,select{padding:10px 12px;min-height:48px;max-width:100%;border:1.5px solid
 input[type=checkbox]{width:22px;height:22px;min-height:0;margin:0;accent-color:var(--inchiostro)}
 :focus-visible{outline:3px solid var(--nuovo);outline-offset:2px}
 label{display:block}
-.insegna{background:var(--seppia)}
-.insegna img{display:block;width:100%;max-width:960px;height:auto;max-height:230px;object-fit:cover;object-position:center top;margin:0 auto}
+.insegna{background:radial-gradient(120% 90% at 50% 0%,#2f5b86 0%,var(--inchiostro) 70%);padding:16px 0 10px}
+.insegna img{display:block;width:132px;height:132px;margin:0 auto;border-radius:50%;box-shadow:0 0 0 3px var(--seppia),0 10px 24px rgba(0,0,0,.4)}
 .nastro{background:var(--inchiostro);color:#fff}
 .nastro div{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px}
 .nastro h1{margin:0;font:600 23px var(--serif);letter-spacing:.01em}
@@ -448,7 +448,7 @@ details button{margin:4px 6px 4px 0}
 @media (max-width:560px){.testa{grid-template-columns:auto 1fr}.importo{grid-column:1/-1;text-align:right;margin-top:-6px}.azioni .stato{margin-left:0}.azioni button{flex:1 1 auto}}
 @media (prefers-reduced-motion:reduce){#newOrders{animation:none}.cartellino{transform:none}}
 </style>
-<header class="insegna"><img src="https://ermestre.github.io/pescheriamassimo/img/insegna.jpg" alt="Pescheria da Massimo" width="1000" height="500"><div class="nastro"><div><h1>Banco ordini</h1><p id="oggiData"></p></div></div></header>
+<header class="insegna"><img src="https://ermestre.github.io/pescheriamassimo/img/logo-pescheria-1.webp" alt="Pescheria da Massimo" width="132" height="132"><div class="nastro"><div><h1>Banco ordini</h1><p id="oggiData"></p></div></div></header>
 <main>
 <form id="login" class="accesso"><h2>Accedi agli ordini</h2><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label class="spunta"><input id="showKey" type="checkbox"> Mostra password</label><label class="spunta"><input id="rememberAccess" type="checkbox"> Ricordami su questo dispositivo</label><button id="loginButton">Accedi</button><p>Se selezioni Ricordami, la chiave viene conservata in questo browser. Chi usa questo browser potrà aprire gli ordini. Esci cancella l'accesso salvato.</p></form>
 <section id="panel" hidden>
