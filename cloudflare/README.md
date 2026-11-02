@@ -163,3 +163,22 @@ Verifica: node tests/reads.test.mjs (SQLite reale in memoria con 600 ordini chiu
 - I messaggi compaiono in un riquadro in basso sullo schermo; toccandolo si chiude.
 
 Nessuna modifica alle API, ai dati o alle funzioni di incasso, rimborso, conferma WhatsApp e avvisi. Verificato in Chromium (PC 1280 px e telefono 390 px) con ordini finti su database locale; suite di test passate tranne menu.test.cjs, che fallisce già su main per due controlli legati ai dati di menu.json.
+
+## Eliminare gli ordini di prova (2 novembre 2026)
+
+Nel pannello, sugli ordini con stato Annullato compare il pulsante "Elimina ordine" (visibile con Mostra → Tutti). Dopo una conferma elimina definitivamente l'ordine con i suoi incassi, rimborsi e prenotazioni di quantità. Gli ordini non annullati non si possono eliminare: il server risponde 409. Il trigger rev_order_delete aggiorna il numero di revisione (SCHEMA_VERSION 3), così gli altri pannelli aperti si aggiornano da soli. Verifica: node tests/elimina.test.mjs.
+
+## Gestione guidata, carrello e orari configurabili (2 novembre 2026)
+
+Gestione (gestione.html):
+- Scheda del pesce a scelte: specie dal catalogo (riempie il nome scientifico e l'allergene), metodo di produzione (Pescato, Pescato in acque dolci, Allevato), zona di cattura FAO con sottozona o divisione per le zone 27 e 37, paese di allevamento, attrezzo di pesca (categorie dell'allegato III del Reg. UE 1379/2013), stato del prodotto e allergeni a pulsanti. Le date di arrivo, pesca e congelamento si scelgono dal calendario.
+- Per ogni prodotto un riquadro indica cosa manca delle informazioni obbligatorie; dopo il salvataggio compare l'elenco dei prodotti in vendita da completare. Nessun dato di provenienza viene compilato in automatico.
+- Scheda "Ritiro e ordini": termine generale, orari di ritiro standard e serali a pulsanti (ritiro.orari, ritiro.orari_sera), chiusure straordinarie e sospensione degli ordini.
+- Per prodotto: termine proprio e ritiro serale (su ordinazione) con un tocco.
+- Salvataggio in conflitto: messaggio chiaro con invito a Ricarica.
+
+Menu clienti (index.html): pulsante Aggiungi, peso e preparazione solo dopo l'aggiunta, carrello modificabile nel foglio "Il tuo ordine", giorno e ora a pulsanti, nome e cellulare ricordati sul telefono solo se il cliente lo sceglie, conferma con codice corto (prime 6 cifre del codice ordine), scheda prodotto con prima le informazioni obbligatorie.
+
+Worker: ritiro.orari dal menu (se valido, altrimenti gli orari predefiniti), codice corto accanto al nome nel pannello e nel messaggio di conferma WhatsApp. Distribuire il Worker prima di cambiare gli orari standard dalla gestione.
+
+Verifica: tutte le suite passano; tests/ritiro.test.mjs controlla anche gli orari configurati. Prova in Chromium a 390 px: aggiunta prodotti, carrello, scelta giorno e ora, invio con conferma, gestione con scelte a pulsanti.
