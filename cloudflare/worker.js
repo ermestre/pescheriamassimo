@@ -583,7 +583,9 @@ async function load(opts){
     wa.disabled=paid.disabled=select.disabled=true;mutations++;
     try{
      await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify({status:"confirmed"})});
-     o.status="confirmed";select.value="confirmed";wa.textContent="Invia di nuovo la conferma";
+     const wasNew=o.status==="new";o.status="confirmed";select.value="confirmed";wa.textContent="Invia di nuovo la conferma";
+     card.className="ordine stato-confirmed";pill.textContent=states.confirmed;wa.className="secondario";
+     if(wasNew){const step=stepButton("confirmed");if(step)wa.after(step);}
      const link=element("a","Apri il messaggio su WhatsApp");link.href=url;link.target="_blank";link.rel="noopener noreferrer";actions.append(link);
      if(chat)chat.location.replace(url);
      $("msg").textContent="Ordine confermato nel pannello. Premi Invia su WhatsApp per avvisare il cliente. Se la chat non si apre, usa il link sotto l'ordine.";
@@ -592,7 +594,8 @@ async function load(opts){
    };
    actions.append(wa);
   }
-  if(nextStep[o.status]){const [status,label]=nextStep[o.status];const step=element("button",label);step.type="button";step.className="verso-"+status;step.onclick=()=>{step.disabled=true;change({status});};actions.append(step);}
+  const stepButton=current=>{if(!nextStep[current])return null;const [status,label]=nextStep[current];const step=element("button",label);step.type="button";step.className="verso-"+status;step.onclick=()=>{step.disabled=true;change({status});};return step;};
+  {const step=stepButton(o.status);if(step)actions.append(step);}
   if(o.status==="cancelled"){
    const del=element("button","Elimina ordine");del.type="button";del.className="elimina";
    del.onclick=async()=>{

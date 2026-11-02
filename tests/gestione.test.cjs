@@ -26,8 +26,23 @@ assert.match(g.run('aperturaHtml()'),/non sono ancora impostati/);
 g.run('orariApertura();aggiornaApertura(1,0,0,"08:00");aggiornaApertura(1,0,1,"13:00");copiaApertura()');
 assert.equal(g.run('dati.orari_apertura[0].chiuso'),true);assert.equal(g.run('dati.orari_apertura[6].fasce[0][1]'),'13:00');
 
+// Preparazioni suggerite per tipo: mai attivate da sole.
+const sug=n=>[...g.run(`preparazioniSuggerite(${JSON.stringify(n)})`)];
+assert.deepEqual(sug({nome:'Orata',nome_scientifico:'Sparus aurata'}),['Intero','Pulito','Sfilettato']);
+assert.deepEqual(sug({nome:'Tonno rosso',nome_scientifico:'Thunnus thynnus'}),['A tranci']);
+assert.deepEqual(sug({nome:'Gambero rosso',nome_scientifico:'Aristaeomorpha foliacea'}),['Intero','Sgusciato']);
+assert.deepEqual(sug({nome:'Seppia',nome_scientifico:'Sepia officinalis'}),['Intero','Pulito']);
+assert.deepEqual(sug({nome:'Vongola verace',nome_scientifico:'Ruditapes decussatus'}),[]);
+assert.deepEqual(sug({nome:'Insalata di mare'}),[]);
+assert.deepEqual(sug({nome:'Baccalà',allergeni:'Pesce'}),[]);
+const polpo=g.run(`dati.categorie[${ci}].voci.length-1`);assert.equal(g.run(`(dati.categorie[${ci}].voci[${polpo}].preparazioni||[]).length`),0,'nessuna attivazione automatica');
+g.run(`attivaSuggerite(${ci},${polpo})`);assert.equal(g.run(`dati.categorie[${ci}].voci[${polpo}].preparazioni.join()`),'Intero,Pulito');
+// Cliente: una sola preparazione è una scritta, non un menu a tendina.
+
 // Menu clienti: giorni con gli stessi orari raggruppati.
 const c=load('index.html');
+c.run('menu='+JSON.stringify(menu));
+assert.match(c.run('scelteVoce(tutte().find(v=>v.id==="trancio-tonno"),1)'),/Preparazione: <b>A tranci/);assert.doesNotMatch(c.run('scelteVoce(tutte().find(v=>v.id==="trancio-tonno"),1)'),/<select/);assert.match(c.run('scelteVoce(tutte().find(v=>v.id==="orata"),1)'),/<select/);
 const orari=JSON.parse(g.run('JSON.stringify(dati.orari_apertura)'));orari[6].fasce=[['08:00','12:30'],['','']];
 const html=c.run('orariAperturaHtml('+JSON.stringify(orari)+')');
 assert.match(html,/Lun<\/span><span>chiuso/);assert.match(html,/Mar–Sab<\/span><span>8:00–13:00/);assert.match(html,/Dom<\/span><span>8:00–12:30/);
