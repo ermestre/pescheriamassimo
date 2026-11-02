@@ -177,12 +177,12 @@
         },
         {
           "id": "gamberi-rossi",
-          "nome_scientifico": "",
-          "zona_fao": "",
-          "metodo": "",
+          "nome_scientifico": "Aristaeomorpha foliacea",
+          "zona_fao": "FAO 37.2.1 Mar Adriatico (Mediterraneo centrale)",
+          "metodo": "Pescato in acque dolci",
           "provenienza": "",
           "data_arrivo": "",
-          "attrezzo": "",
+          "attrezzo": "Reti da traino",
           "allergeni": "Crostacei",
           "nome": "Gamberi rossi",
           "descrizione": "Pesce fresco del giorno",
@@ -192,7 +192,9 @@
           "disponibile": true,
           "preparazioni": [
             "Intero"
-          ]
+          ],
+          "stato_prodotto": "Fresco",
+          "consiglio": "Friggiti"
         },
         {
           "id": "gamberetti-sgusciati",
