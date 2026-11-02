@@ -23,7 +23,7 @@ La pubblicazione su GitHub non aggiorna automaticamente questo Worker creato man
 - Ogni invio usa un UUID. I tentativi ripetuti con lo stesso codice e contenuto restituiscono l'ordine già ricevuto. Contenuti diversi con lo stesso codice sono rifiutati. Il browser conserva in sessione una firma e il codice dell'ultimo tentativo, senza salvare lì il testo dei dati personali.
 - Il pulsante Nuovo ordine azzera carrello e codice, permettendo anche un secondo ordine identico intenzionale.
 - L'ordine salvato parte da Nuovo. La ricevuta non significa conferma della pescheria e non invia notifiche al cliente. WhatsApp resta facoltativo e non viene letto dal sistema. Gli ordini inviati solo via WhatsApp non vengono archiviati automaticamente.
-- Il pannello usa aggiornamento manuale, si apre sugli ordini nuovi, confermati e pronti di tutte le date, ordinati per ritiro. Include anche ordini rimasti aperti con data passata. Il filtro per giorno è facoltativo; Tutti include anche ritirati e annullati. Mostra fino a 500 ordini per vista, e se sono di più chiede una data senza mostrare un elenco incompleto. I totali si riferiscono alla vista selezionata e non conserva la chiave in localStorage. La chiave resta in memoria e viene persa ricaricando la pagina. La scheda Pagato indica una registrazione manuale, non un pagamento online.
+- Il pannello controlla da solo ogni 30 secondi (vedi "Consumo D1" in fondo), si apre sugli ordini nuovi, confermati e pronti di tutte le date, ordinati per ritiro. Include anche ordini rimasti aperti con data passata. Il filtro per giorno è facoltativo; Tutti include anche ritirati e annullati. Mostra fino a 500 ordini per vista, e se sono di più chiede una data senza mostrare un elenco incompleto. I totali si riferiscono alla vista selezionata. La chiave resta in memoria, salvo la scelta Ricordami descritta più avanti. La scheda Pagato indica una registrazione manuale, non un pagamento online.
 - Giorni: oggi e i prossimi 13 giorni, lunedì escluso, fuso Europe/Rome; le chiusure possono essere date ISO nel menu. Orari standard definiti in HOURS; per prodotti su ordinazione si applicano gli orari serali del menu. Finestre personalizzate non vuote bloccano l'invio fino a una loro implementazione esplicita.
 - Termini ordini supportati: `HH:MM del giorno prima` e `HH:MM del giorno stesso`. Il termine del prodotto prevale sulla categoria e poi sul termine generale. Termini in altri formati bloccano l'invio e richiedono un aggiornamento. Gli orari già trascorsi vengono rifiutati dal server.
 - Il server rifiuta prodotti esauriti, non disponibili, fuori periodo, quantità non valide e totali diversi da quelli mostrati al cliente. In caso di modifica del prezzo il cliente deve aggiornare il menu e controllare nuovamente il riepilogo.
@@ -137,3 +137,29 @@ Distribuire l'intero Worker aggiornato: crea automaticamente inventory, stock_mo
 Verifica: node tests/stock.test.mjs con SQLite reale in memoria (carichi, banco e invii ripetuti, rifiuto senza ordini parziali, annullamento/riattivazione, ritirato, ordini storici e disponibilità pubblica); suite Worker, menu, accesso e avvisi passate. Nessuna verifica sul D1 di produzione: fare una prova dopo distribuzione con un prodotto test.
 
 Riferimenti Cloudflare verificati il 2 novembre 2026: https://developers.cloudflare.com/d1/sql-api/sql-statements/ e https://developers.cloudflare.com/d1/worker-api/d1-database/ (SQL SQLite e batch atomici).
+
+
+## Consumo D1 del pannello (2 novembre 2026)
+
+Problema: ogni 30 secondi il pannello faceva due richieste; ognuna rieseguiva circa 11 istruzioni CREATE e leggeva l'intera tabella orders (senza indice), compresi ritirati e annullati. Con il piano gratuito (5 milioni di righe lette al giorno; dal 1 settembre 2026 al superamento le query falliscono fino a mezzanotte UTC) il consumo cresceva con l'archivio: circa 5.800 letture complete al giorno per ogni pannello aperto.
+
+Soluzione:
+- Tabelle, indici e trigger vengono creati una sola volta per database. La tabella app_meta conserva la versione dello schema (SCHEMA_VERSION): le richieste successive fanno solo una lettura di controllo. Aumentare SCHEMA_VERSION quando si aggiungono tabelle, indici o trigger.
+- Indici orders_status_pickup e orders_pickup: ordini aperti e filtro per data non scorrono più tutto l'archivio.
+- app_meta contiene anche un numero di revisione aggiornato da trigger a ogni nuovo ordine, cambio di stato o pagamento, incasso o rimborso. Ogni 30 secondi il pannello legge solo questo numero (GET /api/changes); ricarica gli ordini e fa suonare l'avviso solo quando cambia.
+- L'aggiornamento automatico non svuota più la lista: la sostituisce in un solo passaggio, mantenendo la posizione sullo schermo e il messaggio in basso. Aggiorna e i filtri funzionano come prima.
+
+Distribuzione: sostituire l'intero cloudflare/worker.js nell'editor Cloudflare e premere Distribuisci. La prima richiesta crea indici, tabella app_meta e trigger; nessun SQL manuale, nessun dato modificato. Il controllo del magazzino (/api/stock) resta su richiesta del pulsante.
+
+Verifica: node tests/reads.test.mjs (SQLite reale in memoria con 600 ordini chiusi: nessuna istruzione CREATE dopo la prima richiesta, controllo da 2 letture, piano di esecuzione con indice, revisione aggiornata da stato, incasso e nuovo ordine). Le altre suite passano. Dopo la distribuzione controllare in Cloudflare, D1 → Metriche, le righe lette al giorno.
+
+## Nuova grafica del pannello ordini (2 novembre 2026)
+
+- Intestazione con l'insegna (img/insegna.jpg da GitHub Pages; la Content-Security-Policy consente solo immagini da https://ermestre.github.io). Se l'immagine non si carica resta il testo alternativo e la barra "Banco ordini" con la data di oggi.
+- Ordini raggruppati per giorno di ritiro (Oggi, Domani, poi la data); i giorni passati con ordini ancora aperti sono in rosso con l'avviso "Ritiro già passato".
+- Ogni ordine ha un cartellino con l'ora di ritiro, il colore dello stato sul bordo (Nuovo oro, Confermato blu, Pronto verde, Ritirato grigio, Annullato rosso), prodotti con quantità in evidenza, note evidenziate, numero del cliente toccabile per chiamare.
+- Pulsante del passo successivo: Confermato → "Segna come pronto", Pronto → "Segna come ritirato". Usa lo stesso cambio di stato del menu Stato, che resta disponibile per ogni altra scelta (per esempio Annullato).
+- Conteggi per stato in alto. Suono, disponibilità, resoconto ed Esci sono raccolti in fondo in "Altri strumenti".
+- I messaggi compaiono in un riquadro in basso sullo schermo; toccandolo si chiude.
+
+Nessuna modifica alle API, ai dati o alle funzioni di incasso, rimborso, conferma WhatsApp e avvisi. Verificato in Chromium (PC 1280 px e telefono 390 px) con ordini finti su database locale; suite di test passate tranne menu.test.cjs, che fallisce già su main per due controlli legati ai dati di menu.json.

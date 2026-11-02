@@ -106,7 +106,6 @@ async function rateLimit(request,env){
  const bucket=Math.floor(Date.now()/600000);
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.ADMIN_TOKEN+':'+ip+':'+bucket));
  const key=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
- await env.db.prepare('CREATE TABLE IF NOT EXISTS order_limits (key TEXT PRIMARY KEY, bucket INTEGER NOT NULL, count INTEGER NOT NULL)').run();
  await env.db.prepare('DELETE FROM order_limits WHERE bucket < ?').bind(bucket-1).run();
  for(const [k,b,max] of [[key,bucket,10],['global:'+bucket,bucket,100]]){
   const row=await env.db.prepare('INSERT INTO order_limits (key,bucket,count) VALUES (?, ?, 1) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count').bind(k,b).first();
@@ -133,7 +132,28 @@ const STOCK_SQL=[
  `CREATE TRIGGER IF NOT EXISTS stock_order_status AFTER UPDATE OF status ON orders WHEN (NEW.status='cancelled')!=(OLD.status='cancelled') BEGIN
  UPDATE stock_reservations SET active=CASE WHEN NEW.status='cancelled' THEN 0 ELSE 1 END WHERE order_id=NEW.id; END`
 ];
-async function ensureStock(db){for(const sql of STOCK_SQL)await db.prepare(sql).run();}
+// Schema: le istruzioni di creazione girano una sola volta per database, non a ogni richiesta.
+// Aumentare SCHEMA_VERSION quando si aggiungono tabelle, indici o trigger.
+const SCHEMA_VERSION=2;
+function schemaSql(){return [
+ 'CREATE TABLE IF NOT EXISTS order_limits (key TEXT PRIMARY KEY, bucket INTEGER NOT NULL, count INTEGER NOT NULL)',
+ ...STOCK_SQL,
+ PAYMENT_SCHEMA,
+ 'CREATE INDEX IF NOT EXISTS payment_events_order ON payment_events(order_id)',
+ 'CREATE INDEX IF NOT EXISTS payment_events_day ON payment_events(business_date,created_at)',
+ 'CREATE INDEX IF NOT EXISTS orders_status_pickup ON orders(status,pickup_date,pickup_time)',
+ 'CREATE INDEX IF NOT EXISTS orders_pickup ON orders(pickup_date,pickup_time)',
+ 'CREATE TABLE IF NOT EXISTS app_meta(key TEXT PRIMARY KEY,value INTEGER NOT NULL)',
+ "INSERT OR IGNORE INTO app_meta(key,value) VALUES('rev',0)",
+ "CREATE TRIGGER IF NOT EXISTS rev_order_insert AFTER INSERT ON orders BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END",
+ "CREATE TRIGGER IF NOT EXISTS rev_order_update AFTER UPDATE ON orders BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END",
+ "CREATE TRIGGER IF NOT EXISTS rev_payment_insert AFTER INSERT ON payment_events BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END"
+];}
+async function ensureSchema(db){
+ try{const row=await db.prepare("SELECT value FROM app_meta WHERE key='schema'").first();if(row&&row.value>=SCHEMA_VERSION)return;}catch(e){}
+ for(const sql of schemaSql())await db.prepare(sql).run();
+ await db.prepare("INSERT INTO app_meta(key,value) VALUES('schema',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(SCHEMA_VERSION).run();
+}
 function stockFailure(e){return String(e?.message||e).includes('STOCK_UNAVAILABLE');}
 async function stockApi(request,env,url){
  if(!url.pathname.startsWith('/api/stock'))return null;
@@ -173,7 +193,7 @@ async function publicApi(request,env){
  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...cors,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}});
  try{
   if(!env.db || typeof env.ADMIN_TOKEN!=='string' || env.ADMIN_TOKEN.length<20)fail('Ordini online non ancora configurati',503);
-  await ensureStock(env.db);
+  await ensureSchema(env.db);
   if(url.pathname==='/api/config' && request.method==='GET'){
    const menu=await readMenu();const stock=(await env.db.prepare('SELECT * FROM inventory').all()).results;for(const c of menu.categorie)for(const v of c.voci){const row=stock.find(x=>x.product_id===v.id);if(row)v.stock_available=row.units/1000;}return respond({ok:true,menu,stock_supported:true,preparations_supported:true,festivities_supported:true,days:pickupDays(menu,new Date())});
   }
@@ -257,17 +277,18 @@ export default {
   if(["/api/config","/api/submit"].includes(url.pathname))return publicApi(request,env);
   if(request.method==="GET" && (url.pathname==="/" || url.pathname==="/admin")){
    return new Response(PAGE,{headers:{...HEADERS,"Content-Type":"text/html; charset=utf-8",
-   "Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"}});
+   "Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https://ermestre.github.io; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"}});
   }
   if(!url.pathname.startsWith("/api/")) return json({errore:"Pagina non trovata"},404);
   if(!await authorized(request,env)) return json({errore:"Chiave di accesso non valida"},401);
   if(!env.db) return json({errore:"Database non collegato"},503);
   try{
-   await ensureStock(env.db);
+   await ensureSchema(env.db);
+   if(url.pathname==="/api/changes" && request.method==="GET"){
+    const row=await env.db.prepare("SELECT value FROM app_meta WHERE key='rev'").first();
+    return json({rev:row?row.value:0});
+   }
    const stockResponse=await stockApi(request,env,url);if(stockResponse)return stockResponse;
-   await env.db.prepare(PAYMENT_SCHEMA).run();
-   await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_order ON payment_events(order_id)").run();
-   await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_day ON payment_events(business_date,created_at)").run();
    const paymentResponse=await paymentApi(request,env,url);if(paymentResponse)return paymentResponse;
    if(url.pathname==="/api/orders" && request.method==="GET"){
     const date=url.searchParams.get("date");
@@ -305,16 +326,128 @@ export default {
   }catch(e){if(stockFailure(e))return json({errore:"Quantità insufficiente. Aggiorna le disponibilità: nessuna modifica è stata salvata."},409);return json({errore:"Impossibile leggere o aggiornare l’archivio. Riprova."},503);}
  }
 };
-const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1b2f4e">
 <title>Ordini · Pescheria Massimo</title>
-<style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
-<h1>Ordini · Pescheria Massimo</h1>
-<form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><label><input id="rememberAccess" type="checkbox"> Ricordami su questo dispositivo</label><button id="loginButton">Accedi</button><p>Se selezioni Ricordami, la chiave viene conservata in questo browser. Chi usa questo browser potrà aprire gli ordini. Esci cancella l'accesso salvato.</p></form>
-<section id="panel" hidden><p id="sessionStatus"></p><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><details><summary>Suono personalizzato</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><details><summary>Disponibilità e vendite al banco</summary><button id="stockLoad" type="button">Aggiorna disponibilità</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Le quantità sono condivise da tutti i giorni di ritiro. Aggiungi solo il pesce libero da prenotazioni già esistenti. Gli ordini precedenti all’attivazione non vengono scalati. Ogni nuovo ordine prenota subito la quantità; Annullato la restituisce. Ritirato resta scalato. Registra le vendite al banco per mantenere corretto il residuo. I prodotti senza carico restano senza limite.</p></details><details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details><div id="orders"></div></section>
-<p id="msg" role="status" aria-live="polite"></p>
+<style>
+:root{--inchiostro:#1b2f4e;--ghiaccio:#e8eff2;--seppia:#efe4d3;--bordo:#c8d4d9;--tenue:#56677a;--nuovo:#e0a526;--nuovo-testo:#7d5400;--confermato:#2c6e9b;--pronto:#2f7d55;--ritirato:#66757d;--annullato:#b0412e;--wa:#1e8a4c;--serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif}
+*{box-sizing:border-box}
+body{margin:0;font:17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--ghiaccio);color:var(--inchiostro);padding-bottom:80px}
+p{overflow-wrap:anywhere}
+button,input,select{font:inherit;color:inherit}
+button{border:0;border-radius:10px;padding:11px 18px;min-height:48px;background:var(--inchiostro);color:#fff;font-weight:600;cursor:pointer}
+button.secondario{background:#fff;color:var(--inchiostro);border:1.5px solid var(--bordo)}
+button:disabled{opacity:.55;cursor:default}
+input,select{padding:10px 12px;min-height:48px;max-width:100%;border:1.5px solid var(--bordo);border-radius:10px;background:#fff}
+input[type=checkbox]{width:22px;height:22px;min-height:0;margin:0;accent-color:var(--inchiostro)}
+:focus-visible{outline:3px solid var(--nuovo);outline-offset:2px}
+label{display:block}
+.insegna{background:var(--seppia)}
+.insegna img{display:block;width:100%;max-width:960px;height:auto;max-height:230px;object-fit:cover;object-position:center top;margin:0 auto}
+.nastro{background:var(--inchiostro);color:#fff}
+.nastro div{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px}
+.nastro h1{margin:0;font:600 23px var(--serif);letter-spacing:.01em}
+.nastro p{margin:0;opacity:.85}
+main{max-width:960px;margin:0 auto;padding:16px}
+.accesso{max-width:460px;margin:20px auto;background:#fff;border:1px solid var(--bordo);border-radius:16px;padding:22px}
+.accesso h2{margin:0 0 6px;font:600 22px var(--serif)}
+.accesso label{margin:14px 0}
+.accesso .spunta{display:flex;align-items:center;gap:10px}
+#key{width:100%;margin-top:6px}
+.accesso button{width:100%}
+.accesso p{color:var(--tenue);font-size:15px;margin-bottom:0}
+.comandi{background:#fff;border:1px solid var(--bordo);border-radius:14px;padding:14px;display:grid;gap:14px}
+.avvisi{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.avvisi p{margin:0;flex:1 1 240px;color:var(--tenue);font-size:15px}
+#enableAlerts{background:var(--nuovo);color:#2b1d00}
+#enableAlerts::before{content:"\\1F514  "}
+.filtri{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.filtri label{display:grid;gap:4px;font-size:14px;color:var(--tenue)}
+#newOrders{margin:14px 0 0;padding:14px 16px;border-radius:12px;background:#fff4d9;border:2px solid var(--nuovo);color:#2b1d00;font-weight:700;animation:richiamo 1.1s ease-out 3}
+@keyframes richiamo{from{box-shadow:0 0 0 0 rgba(224,165,38,.6)}to{box-shadow:0 0 0 16px rgba(224,165,38,0)}}
+.riepilogo{margin:20px 0 0}
+#scope{margin:0;font:600 21px var(--serif)}
+#summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+#summary:empty{display:none}
+.conta{padding:5px 12px;border-radius:999px;background:#fff;border:1.5px solid currentColor;font-size:15px;font-weight:600}
+.conta.stato-new{color:var(--nuovo-testo)}.conta.stato-confirmed{color:var(--confermato)}.conta.stato-ready{color:var(--pronto)}.conta.stato-collected{color:var(--ritirato)}.conta.stato-cancelled{color:var(--annullato)}
+#totals{margin:0;color:var(--tenue);font-size:15px}
+.giorno{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:28px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--inchiostro);font:700 25px var(--serif)}
+.giorno small{font:400 15px system-ui,sans-serif;color:var(--tenue)}
+.giorno.passato{color:var(--annullato);border-color:var(--annullato)}
+.ordine{--c:var(--bordo);background:#fff;border:1px solid var(--bordo);border-left:8px solid var(--c);border-radius:14px;padding:14px 16px;margin:12px 0}
+.ordine.stato-new{--c:var(--nuovo);background:#fffaf0}
+.ordine.stato-confirmed{--c:var(--confermato)}
+.ordine.stato-ready{--c:var(--pronto)}
+.ordine.stato-collected{--c:var(--ritirato)}
+.ordine.stato-cancelled{--c:var(--annullato);background:#fbf6f5}
+.testa{display:grid;grid-template-columns:auto 1fr auto;gap:12px 14px;align-items:center}
+.cartellino{background:var(--seppia);border-radius:8px;padding:6px 10px;min-width:78px;text-align:center;transform:rotate(-2deg);box-shadow:1px 2px 0 rgba(27,47,78,.18)}
+.cartellino b{display:block;font:700 26px/1.1 var(--serif)}
+.cartellino span{font-size:13px;color:var(--tenue)}
+.chi h3{margin:0;font:700 21px/1.2 var(--serif);overflow-wrap:anywhere}
+.pill{display:inline-block;margin-top:4px;padding:2px 10px;border-radius:999px;background:var(--c);color:#fff;font-size:14px;font-weight:600}
+.stato-new .pill{color:#2b1d00}
+.importo{margin:0;font:700 22px var(--serif);white-space:nowrap}
+.prodotti{list-style:none;margin:12px 0 0;padding:0;border-top:1px dashed var(--bordo)}
+.prodotti li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:8px 0;border-bottom:1px dashed var(--bordo)}
+.prodotti b{min-width:72px}
+.tag{font-size:14px;padding:1px 8px;border-radius:6px;background:var(--ghiaccio)}
+.note{white-space:pre-line;margin:10px 0 0;padding:8px 12px;border-radius:8px;background:#fff4d9}
+.ritardo{margin:10px 0 0;color:var(--annullato);font-weight:600}
+.azioni{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:14px}
+.azioni .wa{background:var(--wa)}
+.azioni .verso-ready{background:var(--pronto)}
+.azioni .verso-collected{background:var(--inchiostro)}
+.azioni .stato{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:15px;color:var(--tenue)}
+.azioni small{flex-basis:100%;color:var(--tenue)}
+.azioni a{color:var(--wa);font-weight:700}
+.pagamento{margin-top:14px;padding:12px;border-radius:10px;background:var(--ghiaccio)}
+.pagamento p{margin:0 0 8px}
+.pagamento form{display:flex;flex-wrap:wrap;align-items:end;gap:8px}
+.pagamento label{display:grid;gap:4px;font-size:14px;color:var(--tenue)}
+.pagamento input{width:150px}
+.piede{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;margin-top:12px;font-size:14px;color:var(--tenue)}
+.piede a{color:var(--inchiostro);font-size:17px;font-weight:700}
+.vuoto{margin:20px 0;padding:32px 20px;border:2px dashed var(--bordo);border-radius:14px;background:#fff;text-align:center;color:var(--tenue)}
+.strumenti{margin-top:44px;padding-top:6px;border-top:2px solid var(--bordo)}
+.strumenti h2{margin:14px 0 6px;font:600 19px var(--serif);color:var(--tenue)}
+details{background:#fff;border:1px solid var(--bordo);border-radius:12px;margin:10px 0;padding:0 14px}
+details[open]{padding-bottom:14px}
+summary{cursor:pointer;padding:14px 0;font-weight:600}
+details p{color:var(--tenue);font-size:15px}
+details button{margin:4px 6px 4px 0}
+#stockProducts article{border-top:1px solid var(--bordo);padding:10px 0}
+#stockProducts h3{margin:0;font:600 18px var(--serif)}
+#stockProducts form{display:flex;flex-wrap:wrap;gap:8px}
+#reportOutput h2,#reportOutput h3{font-family:var(--serif)}
+#reportOutput p{color:var(--inchiostro)}
+.uscita{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-top:16px}
+.uscita p{margin:0;color:var(--tenue);font-size:15px}
+#msg{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);margin:0;padding:12px 18px;border-radius:12px;background:var(--inchiostro);color:#fff;box-shadow:0 8px 24px rgba(27,47,78,.3);white-space:pre-wrap;cursor:pointer;z-index:5}
+#msg:empty{display:none}
+@media (max-width:560px){.testa{grid-template-columns:auto 1fr}.importo{grid-column:1/-1;text-align:right;margin-top:-6px}.azioni .stato{margin-left:0}.azioni button{flex:1 1 auto}}
+@media (prefers-reduced-motion:reduce){#newOrders{animation:none}.cartellino{transform:none}}
+</style>
+<header class="insegna"><img src="https://ermestre.github.io/pescheriamassimo/img/insegna.jpg" alt="Pescheria da Massimo" width="1000" height="500"><div class="nastro"><div><h1>Banco ordini</h1><p id="oggiData"></p></div></div></header>
+<main>
+<form id="login" class="accesso"><h2>Accedi agli ordini</h2><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label class="spunta"><input id="showKey" type="checkbox"> Mostra password</label><label class="spunta"><input id="rememberAccess" type="checkbox"> Ricordami su questo dispositivo</label><button id="loginButton">Accedi</button><p>Se selezioni Ricordami, la chiave viene conservata in questo browser. Chi usa questo browser potrà aprire gli ordini. Esci cancella l'accesso salvato.</p></form>
+<section id="panel" hidden>
+<div class="comandi"><div class="avvisi"><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p></div><div class="filtri"><label>Mostra<select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Giorno di ritiro<input id="day" type="date"></label><button id="clearDay" class="secondario">Tutte le date</button><button id="refresh" class="secondario">Aggiorna</button></div></div>
+<p id="newOrders" role="alert" hidden></p>
+<div class="riepilogo"><p id="scope"></p><div id="summary"></div><p id="totals"></p></div>
+<div id="orders"></div>
+<section class="strumenti"><h2>Altri strumenti</h2>
+<details><summary>Suono degli avvisi</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button" class="secondario">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details>
+<details><summary>Disponibilità e vendite al banco</summary><button id="stockLoad" type="button">Aggiorna disponibilità</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Le quantità sono condivise da tutti i giorni di ritiro. Aggiungi solo il pesce libero da prenotazioni già esistenti. Gli ordini precedenti all’attivazione non vengono scalati. Ogni nuovo ordine prenota subito la quantità; Annullato la restituisce. Ritirato resta scalato. Registra le vendite al banco per mantenere corretto il residuo. I prodotti senza carico restano senza limite.</p></details>
+<details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" class="secondario" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details>
+<div class="uscita"><p id="sessionStatus"></p><button id="logout" class="secondario">Esci</button></div>
+</section>
+</section>
+</main>
+<p id="msg" role="status" aria-live="polite" title="Tocca per chiudere"></p>
 <script>
 let token="",loadSeq=0,alertAudio=null,alertsEnabled=false,polling=false,mutations=0;
-const seenOrders=new Set();let ordersBaseline=false;
+const seenOrders=new Set();let ordersBaseline=false,lastRev=null;
 const ACCESS_KEY="pm-admin-access-v1";let rememberWanted=false,accessSaved=false,authGeneration=0,loginBusy=false;
 function removeSavedAccess(){try{localStorage.removeItem(ACCESS_KEY);return true;}catch(e){return false;}}
 function saveAccess(){
@@ -336,6 +469,8 @@ $("showKey").onchange=()=>{$("key").type=$("showKey").checked?"text":"password";
 const money=n=>new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n/100);
 const states={new:"Nuovo",confirmed:"Confermato",ready:"Pronto",collected:"Ritirato",cancelled:"Annullato"};
 $("day").value="";
+$("oggiData").textContent=new Date().toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});
+$("msg").onclick=()=>{$("msg").textContent="";};
 const formatDate=date=>new Date(date+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});
 function confirmationUrl(o){
  let phone=String(o.customer_phone||"").replace(/[^0-9+]/g,"");
@@ -363,36 +498,91 @@ async function api(path,options={}){
  }catch(e){if(controller.signal.aborted)throw new Error("Il servizio non risponde entro 15 secondi. Riprova: nessun ordine è stato cancellato.");throw e;}
  finally{clearTimeout(timer);}
 }
-function exit(){$("stockProducts").replaceChildren();$("stockMsg").textContent="";authGeneration++;loginBusy=false;$("loginButton").disabled=false;const cleared=removeSavedAccess();rememberWanted=false;$("rememberAccess").checked=false;ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;return cleared;}
-async function load(){
+function exit(){$("stockProducts").replaceChildren();$("stockMsg").textContent="";authGeneration++;loginBusy=false;$("loginButton").disabled=false;const cleared=removeSavedAccess();rememberWanted=false;$("rememberAccess").checked=false;ordersBaseline=false;lastRev=null;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("summary").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;return cleared;}
+const romeToday=()=>new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"});
+const nextDay=d=>{const x=new Date(d+"T12:00:00Z");x.setUTCDate(x.getUTCDate()+1);return x.toISOString().slice(0,10);};
+const shortDate=d=>new Date(d+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"short",day:"numeric",month:"short"});
+const countLabels={new:["nuovo","nuovi"],confirmed:["confermato","confermati"],ready:["pronto","pronti"],collected:["ritirato","ritirati"],cancelled:["annullato","annullati"]};
+const nextStep={confirmed:["ready","Segna come pronto"],ready:["collected","Segna come ritirato"]};
+const quantityText=item=>{const q=item.quantity??item.qta;return (typeof q==="number"?q.toLocaleString("it-IT"):(q??""))+" "+(item.unit??item.unita??"");};
+async function load(opts){
+ const quiet=opts?.quiet===true;
  const seq=++loadSeq;
- $("orders").replaceChildren();$("totals").textContent="";$("scope").textContent="";
- $("msg").textContent="Caricamento…";
+ if(!quiet){$("orders").replaceChildren();$("summary").replaceChildren();$("totals").textContent="";$("scope").textContent="";$("msg").textContent="Caricamento…";}
  try{
  const query=new URLSearchParams({view:$("view").value});
  if($("day").value)query.set("date",$("day").value);
  const data=await api("/api/orders?"+query);
  if(seq!==loadSeq || !token)return;
  saveAccess();$("key").value="";
- $("scope").textContent=($("view").value==="open"?"Ordini da gestire: nuovi, confermati e pronti":"Archivio: tutti gli stati")+($("day").value?" · Ritiro "+formatDate($("day").value):" · Tutte le date di ritiro");
- $("login").hidden=true;$("panel").hidden=false;$("orders").replaceChildren();
+ $("scope").textContent=($("view").value==="open"?"Ordini da gestire":"Tutti gli ordini, anche ritirati e annullati")+($("day").value?", ritiro "+formatDate($("day").value):"");
+ $("login").hidden=true;$("panel").hidden=false;
  const active=data.orders.filter(o=>o.status!=="cancelled");
- $("totals").textContent=active.length+" ordini · Da incassare (stima): "+money(active.filter(o=>!o.paid).reduce((s,o)=>s+o.total_cents,0))+" · Incassi effettivi nel resoconto giornaliero";
+ $("totals").textContent="Da incassare (stima del menu): "+money(active.filter(o=>!o.paid).reduce((s,o)=>s+o.total_cents,0))+". Gli incassi effettivi sono nel resoconto giornaliero.";
+ const counts={};for(const o of data.orders)counts[o.status]=(counts[o.status]||0)+1;
+ const chips=[];
+ for(const value of Object.keys(states))if(counts[value]){const chip=element("span",counts[value]+" "+countLabels[value][counts[value]===1?0:1]);chip.className="conta stato-"+value;chips.push(chip);}
+ $("summary").replaceChildren(...chips);
+ const today=romeToday(),tomorrow=nextDay(today),cards=[];let lastDay=null;
  for(const o of data.orders){
-  const card=element("article","");
-  card.append(element("h2",o.customer_name+" · "+money(o.total_cents)),element("small","Codice: "+o.id),element("p","Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time),element("p","Cellulare: "+o.customer_phone));
-  if(o.notes)card.append(element("p","Note: "+o.notes));
-  const list=element("ul","");
-  for(const item of o.items)list.append(element("li",(item.quantity??item.qta??"")+" "+(item.unit??item.unita??"")+" · "+(item.name??item.nome??item.id??"Prodotto")+(item.preparation?" · "+item.preparation:"")+(item.occasion?" · "+item.occasion:"")));
+  if(o.pickup_date!==lastDay){
+   lastDay=o.pickup_date;
+   const heading=element("h2","");heading.className="giorno"+(o.pickup_date<today?" passato":"");
+   heading.append(element("span",o.pickup_date===today?"Oggi":o.pickup_date===tomorrow?"Domani":shortDate(o.pickup_date)),element("small",formatDate(o.pickup_date)));
+   cards.push(heading);
+  }
+  const open=["new","confirmed","ready"].includes(o.status);
+  const card=element("article","");card.className="ordine stato-"+o.status;
+  const tag=element("div","");tag.className="cartellino";tag.append(element("b",o.pickup_time),element("span",shortDate(o.pickup_date)));
+  const who=element("div","");who.className="chi";const pill=element("span",states[o.status]||o.status);pill.className="pill";who.append(element("h3",o.customer_name),pill);
+  const price=element("p",money(o.total_cents));price.className="importo";
+  const head=element("div","");head.className="testa";head.append(tag,who,price);card.append(head);
+  const list=element("ul","");list.className="prodotti";
+  for(const item of o.items){
+   const li=element("li","");li.append(element("b",quantityText(item)),element("span",item.name??item.nome??item.id??"Prodotto"));
+   for(const extra of [item.preparation,item.occasion])if(extra){const t=element("span",extra);t.className="tag";li.append(t);}
+   list.append(li);
+  }
   card.append(list);
+  if(o.notes){const note=element("p","Note: "+o.notes);note.className="note";card.append(note);}
+  if(open&&o.pickup_date<today){const late=element("p","Ritiro già passato: segna Ritirato o Annullato.");late.className="ritardo";card.append(late);}
   const paid=element("input","");paid.type="checkbox";paid.checked=!!o.paid;
   paid.hidden=true;card.append(paid);
-  card.append(element("p",o.paid?(o.recorded_balance_cents>0?"Pagato · Incasso registrato: "+money(o.recorded_balance_cents):"Pagato prima del registro · data e importo effettivo non disponibili"):"Da incassare · importo del menu indicativo"));
+  const actions=element("div","");actions.className="azioni";
+  const select=element("select","");select.setAttribute("aria-label","Stato ordine "+o.id);
+  for(const [value,title] of Object.entries(states)){const option=element("option",title);option.value=value;select.append(option);}select.value=o.status;
+  async function change(body){mutations++;paid.disabled=select.disabled=true;try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify(body)});}catch(e){$("msg").textContent=e.message;paid.checked=!!o.paid;select.value=o.status;paid.disabled=select.disabled=false;return;}finally{mutations--;}await load();}
+  select.onchange=()=>change({status:select.value});
+  if(["new","confirmed"].includes(o.status)){
+   const wa=element("button",o.status==="new"?"Conferma su WhatsApp":"Invia conferma su WhatsApp");wa.type="button";wa.className=o.status==="new"?"wa":"secondario";
+   wa.onclick=async()=>{
+    const url=confirmationUrl(o);
+    if(!url){$("msg").textContent="Numero non valido: verifica il cellulare del cliente.";return;}
+    const chat=window.open("about:blank","_blank");if(chat)chat.opener=null;
+    wa.disabled=paid.disabled=select.disabled=true;mutations++;
+    try{
+     await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify({status:"confirmed"})});
+     o.status="confirmed";select.value="confirmed";wa.textContent="Invia di nuovo la conferma";
+     const link=element("a","Apri il messaggio su WhatsApp");link.href=url;link.target="_blank";link.rel="noopener noreferrer";actions.append(link);
+     if(chat)chat.location.replace(url);
+     $("msg").textContent="Ordine confermato nel pannello. Premi Invia su WhatsApp per avvisare il cliente. Se la chat non si apre, usa il link sotto l'ordine.";
+    }catch(e){if(chat)chat.close();$("msg").textContent=e.message;}
+    finally{mutations--;wa.disabled=paid.disabled=select.disabled=false;}
+   };
+   actions.append(wa);
+  }
+  if(nextStep[o.status]){const [status,label]=nextStep[o.status];const step=element("button",label);step.type="button";step.className="verso-"+status;step.onclick=()=>{step.disabled=true;change({status});};actions.append(step);}
+  const stateLabel=element("label","Stato");stateLabel.className="stato";stateLabel.append(select);actions.append(stateLabel);
+  if(["new","confirmed"].includes(o.status))actions.append(element("small","Il messaggio parte solo quando premi Invia in WhatsApp."));
+  card.append(actions);
+  const payment=element("div","");payment.className="pagamento";
+  payment.append(element("p",o.paid?(o.recorded_balance_cents>0?"Pagato. Incasso registrato: "+money(o.recorded_balance_cents):"Pagato prima del registro: data e importo effettivo non disponibili"):"Da incassare. L'importo del menu è indicativo."));
   const paymentForm=element("form","");
   const amount=element("input","");amount.type="number";amount.min="0.01";amount.max="100000";amount.step="0.01";amount.value=(o.total_cents/100).toFixed(2);amount.required=true;amount.setAttribute("aria-label","Importo effettivo in euro");
   const method=element("select","");method.setAttribute("aria-label","Metodo pagamento");for(const [value,text] of [["cash","Contanti"],["card","Carta"]]){const opt=element("option",text);opt.value=value;method.append(opt);}
   const payButton=element("button",o.paid?"Registra rimborso totale":"Registra incasso");
-  if(!o.paid)paymentForm.append(element("label","Importo effettivo (€)"),amount);
+  if(o.paid)payButton.className="secondario";
+  if(!o.paid){const amountLabel=element("label","Importo effettivo (€)");amountLabel.append(amount);paymentForm.append(amountLabel);}
   paymentForm.append(method,payButton);
   paymentForm.oninput=()=>{paymentForm.dataset.dirty="true";};
   let paymentId=null,paymentSignature="";
@@ -404,32 +594,16 @@ async function load(){
    payButton.disabled=true;mutations++;
    try{await api("/api/payments",{method:"POST",body:JSON.stringify({...body,id:paymentId})});await load();$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;$("reportMsg").textContent="Movimento salvato. Premi Mostra resoconto per aggiornare.";}catch(e){$("msg").textContent=e.message;payButton.disabled=false;}finally{mutations--;}
   };
-  if((o.paid&&o.recorded_balance_cents>0)||(!o.paid&&o.status!=="cancelled"))card.append(paymentForm);
-  const select=element("select","");select.setAttribute("aria-label","Stato ordine "+o.id);
-  for(const [value,title] of Object.entries(states)){const option=element("option",title);option.value=value;select.append(option);}select.value=o.status;card.append(select);
-  async function change(body){mutations++;paid.disabled=select.disabled=true;try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify(body)});}catch(e){$("msg").textContent=e.message;paid.checked=!!o.paid;select.value=o.status;paid.disabled=select.disabled=false;return;}finally{mutations--;}await load();}
-  select.onchange=()=>change({status:select.value});
-  if(["new","confirmed"].includes(o.status)){
-   const wa=element("button",o.status==="new"?"Conferma su WhatsApp":"Invia conferma su WhatsApp");wa.type="button";
-   wa.onclick=async()=>{
-    const url=confirmationUrl(o);
-    if(!url){$("msg").textContent="Numero non valido: verifica il cellulare del cliente.";return;}
-    const chat=window.open("about:blank","_blank");if(chat)chat.opener=null;
-    wa.disabled=paid.disabled=select.disabled=true;mutations++;
-    try{
-     await api("/api/orders/"+encodeURIComponent(o.id),{method:"PATCH",body:JSON.stringify({status:"confirmed"})});
-     o.status="confirmed";select.value="confirmed";wa.textContent="Invia di nuovo la conferma";
-     const link=element("a","Apri il messaggio su WhatsApp");link.href=url;link.target="_blank";link.rel="noopener noreferrer";card.append(link);
-     if(chat)chat.location.replace(url);
-     $("msg").textContent="Ordine confermato nel pannello. Premi Invia su WhatsApp per avvisare il cliente. Se la chat non si apre, usa il link sotto l'ordine.";
-    }catch(e){if(chat)chat.close();$("msg").textContent=e.message;}
-    finally{mutations--;wa.disabled=paid.disabled=select.disabled=false;}
-   };
-   card.append(wa,element("small","Il messaggio parte solo quando premi Invia in WhatsApp."));
-  }
-  $("orders").append(card);
+  if((o.paid&&o.recorded_balance_cents>0)||(!o.paid&&o.status!=="cancelled"))payment.append(paymentForm);
+  card.append(payment);
+  const foot=element("div","");foot.className="piede";
+  const phone=element("a",o.customer_phone);phone.href="tel:"+String(o.customer_phone||"").replace(/[^0-9+]/g,"");phone.setAttribute("aria-label","Chiama "+o.customer_name);
+  foot.append(phone,element("small","Codice: "+o.id));card.append(foot);
+  cards.push(card);
  }
- $("msg").textContent=data.orders.length?"Aggiornato. Premi Aggiorna per cercare nuovi ordini.":($("view").value==="open"?"Nessun ordine da gestire":"Nessun ordine in archivio")+($("day").value?" per questa data.":".");
+ if(!data.orders.length){const empty=element("p",($("view").value==="open"?"Nessun ordine da preparare":"Nessun ordine in archivio")+($("day").value?" per questo giorno.":".")+" Il pannello controlla da solo i nuovi ordini ogni 30 secondi.");empty.className="vuoto";cards.push(empty);}
+ $("orders").replaceChildren(...cards);
+ if(!quiet)$("msg").textContent="";
  }catch(e){if(seq===loadSeq)$("msg").textContent=e.message;}
 }
 
@@ -585,6 +759,10 @@ async function checkOrders(){
  if(!token||polling||mutations)return;
  polling=true;const activeToken=token;
  try{
+  // Controllo leggero: legge un solo numero che cambia a ogni nuovo ordine, stato o incasso.
+  const change=await api("/api/changes");
+  if(token!==activeToken)return;
+  if(lastRev!==null&&change.rev===lastRev)return;
   const result=await api("/api/orders?view=open");
   if(token!==activeToken)return;
   const fresh=newOrderIds(result.orders);
@@ -593,7 +771,7 @@ async function checkOrders(){
    banner.textContent=fresh.length+" nuovi ordini ricevuti: "+fresh.map(o=>o.customer_name).join(", ")+".";
    document.title="Nuovo ordine · Pescheria Massimo";soundAlert();
   }
-  if(!mutations&&!["INPUT","SELECT"].includes(document.activeElement?.tagName)&&!document.querySelector('form[data-dirty="true"]'))await load();
+  if(!mutations&&!["INPUT","SELECT"].includes(document.activeElement?.tagName)&&!document.querySelector('form[data-dirty="true"]')){await load({quiet:true});if(token===activeToken)lastRev=change.rev;}
  }catch(e){if(token===activeToken)$("alertStatus").textContent="Controllo automatico non riuscito. Riprovo tra 30 secondi. Puoi premere Aggiorna.";}
  finally{polling=false;}
 }
