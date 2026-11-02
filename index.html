@@ -5,6 +5,9 @@
 <meta name="pm-release" content="carrello-20261102">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pescheria da Massimo</title>
+<link rel="icon" type="image/png" href="img/icona-64.png">
+<link rel="apple-touch-icon" href="img/icona-180.png">
+<meta name="theme-color" content="#1b2f4e">
 <style>
   :root { --blu:#1b2f4e; --ghiaccio:#e8eff2; --seppia:#efe4d3; --oro:#e0a526; --grigio:#56677a; --bordo:#c8d4d9; --sabbia:#efe4d3;
           --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif; }
@@ -132,6 +135,8 @@
 @keyframes stelle-festa{0%,100%{transform:translateY(0);opacity:.35}50%{transform:translateY(4px);opacity:.6}}
 @media(prefers-reduced-motion:reduce){.banner-festa::before,.banner-festa::after{animation:none}.banner-festa::before{display:none}}
 
+.hero.con-logo { aspect-ratio: auto; max-height: none; display: grid; place-items: center; padding: 22px 0 6px; background: radial-gradient(120% 90% at 50% 0%, #2f5b86 0%, var(--blu) 70%); }
+.hero.con-logo .logo { width: min(62vw, 250px); height: auto; border-radius: 50%; box-shadow: 0 0 0 4px var(--seppia), 0 12px 28px rgba(0,0,0,.4); }
 .fiducia { padding: 10px 14px 12px; }
 .fiducia .sotto { font-size: 18px; margin-bottom: 6px; }
 .fiducia span { font-size: 12px; padding: 3px 9px; margin: 2px; }
@@ -664,7 +669,9 @@ fetch("menu.json", { cache: "no-store" })
   .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then(data => {
     menu = data;
-    if (menu.foto_insegna) document.getElementById("hero").style.backgroundImage = `url('${menu.foto_insegna}')`;
+    const hero=document.getElementById("hero");
+    if (menu.logo) { hero.classList.add("con-logo"); hero.innerHTML = `<img class="logo" src="${escapa(menu.logo)}" alt="Pescheria da Massimo" width="260" height="260">`; }
+    else if (menu.foto_insegna) hero.style.backgroundImage = `url('${menu.foto_insegna}')`;
     if (menu.whatsapp) NUMERO_WHATSAPP = menu.whatsapp;
     if (menu.indirizzo) document.getElementById("indirizzo").innerHTML = `
       Pescheria da Massimo<br>${menu.indirizzo}<br>
