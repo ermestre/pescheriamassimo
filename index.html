@@ -2,85 +2,126 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="ritiro-valido-20261102">
+<meta name="pm-release" content="grafica-telefono-20261102">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pescheria da Massimo</title>
 <style>
-  :root { --blu:#1f3b5c; --sabbia:#f6f1e7; --oro:#e0a526; --grigio:#6b6b6b; }
+  :root { --blu:#1b2f4e; --ghiaccio:#e8eff2; --seppia:#efe4d3; --oro:#e0a526; --grigio:#56677a; --bordo:#c8d4d9; --sabbia:#efe4d3;
+          --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--sabbia); color:#222; padding-bottom: 120px; }
-  .hero { height: 190px; background: var(--blu) center/cover no-repeat; }
-  .fiducia .sotto { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
-  .fiducia { background: var(--blu); color:#fff; font-size: 13px; text-align:center; padding: 8px 12px 12px; }
-  .fiducia span { display:inline-block; margin: 2px 8px; }
+  [hidden] { display: none !important; }
+  html { scroll-behavior: smooth; }
+  body { margin:0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--ghiaccio); color: var(--blu); padding-bottom: 120px; -webkit-text-size-adjust: 100%; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--oro); outline-offset: 2px; }
+
+  /* Insegna e promesse */
+  .hero { aspect-ratio: 2 / 1; max-height: 320px; background: var(--seppia) center top / cover no-repeat; }
+  .fiducia { background: var(--blu); color:#fff; padding: 14px 16px 16px; text-align:center; }
+  .fiducia .sotto { font: 600 20px/1.25 var(--serif); margin-bottom: 10px; }
+  .fiducia span { display:inline-block; margin: 3px 3px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: 13px; }
+
+  /* Navigazione categorie */
+  .categorie { position: sticky; top: 0; z-index: 5; display:flex; gap: 8px; overflow-x:auto; padding: 10px 14px; background: rgba(232,239,242,.94); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-bottom: 1px solid var(--bordo); scrollbar-width: none; }
+  .categorie::-webkit-scrollbar { display:none; }
+  .categorie:empty { display:none; }
+  .categorie a { flex: none; padding: 8px 14px; border-radius: 999px; background:#fff; border: 1.5px solid var(--bordo); color: var(--blu); text-decoration:none; font-weight:600; font-size: 15px; }
+  .categorie a.festa { background: var(--blu); border-color: var(--blu); color:#fff; }
+
   main { max-width: 640px; margin: 0 auto; padding: 0 14px; }
-  h2 { font-size: 15px; color: var(--blu); margin: 26px 4px 10px; text-transform: uppercase; letter-spacing: .6px; }
-  .oggi { background:#fff; border-radius: 14px; overflow:hidden; margin-top: 16px; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
-  .oggi img { width:100%; height: 160px; object-fit: contain; background:#fff; display:block; }
-  .oggi .corpo { padding: 12px 14px 14px; }
-  .etichetta { display:inline-block; background: var(--oro); color:#222; font-size: 12px; font-weight:700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; }
-  .card { background:#fff; border-radius:12px; padding:10px; margin-bottom:10px; display:flex; align-items:center; gap:12px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
-  .card img { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; flex: none; background:#eee; }
-  .info { flex:1; min-width:0; }
-  .nome { font-weight:700; font-size: 16px; }
-  .desc { font-size: 13px; color: var(--grigio); margin-top:3px; }
-  .prezzo { font-weight:700; color: var(--blu); white-space:nowrap; font-size:15px; margin-top:4px; }
-  .prezzo small { font-weight:400; color: var(--grigio); font-size: 12px; }
-  .card { flex-wrap:wrap; }
-  .scelte { flex-basis:100%; border-top:1px solid #eee;padding-top:10px; }
-  .pesi { display:flex;gap:8px;flex-wrap:wrap;margin:8px 0; }
-  .pesi button { padding:9px 13px;border:1px solid var(--blu);border-radius:8px;background:white;font:inherit;cursor:pointer; }
-  .pesi button[aria-pressed="true"] { background:var(--blu);color:white; }
-  .pesi button:disabled { opacity:.45;cursor:default; }
-  .scelte label { display:block;font-size:14px;margin:8px 0; }
-  .controlli { display:flex; align-items:center; gap:6px; flex: none; }
-  .btn { width:38px; height:38px; border-radius:50%; border:0; background: var(--blu); color:#fff; font-size:22px; line-height:1; cursor:pointer; }
-  .btn:disabled { background:#c9c9c9; cursor:default; }
-  .btn.piu { background: var(--oro); color:#222; font-weight:700; }
-  .btn.piu:disabled { background:#c9c9c9; color:#fff; }
-  .qta { min-width:20px; text-align:center; font-weight:700; }
-  .ritiro { background:#fff; border-radius:12px; padding:14px; margin-top: 10px; }
-  .ritiro label { display:block; font-size: 13px; color: var(--grigio); margin: 10px 0 4px; }
-  select, textarea, input { width:100%; padding:11px; font-size:16px; border:1px solid #ccc; border-radius:8px; background:#fff; font-family: inherit; }
-  textarea { min-height: 60px; }
-  .come { background:#fff; border-radius:12px; padding:14px; margin-top: 10px; font-size: 14px; line-height: 1.5; }
-  .come ol { margin:0; padding-left: 20px; }
-  .barra { position: fixed; left:0; right:0; bottom:0; background: var(--blu); color:#fff; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  section { scroll-margin-top: 64px; }
+  h2 { font: 700 24px/1.2 var(--serif); color: var(--blu); margin: 30px 2px 12px; }
+
+  /* Pesce di oggi */
+  .oggi { background:#fff; border-radius: 16px; overflow:hidden; margin-top: 12px; border: 1px solid var(--bordo); }
+  .oggi img { width:100%; height: 190px; object-fit: cover; display:block; background: var(--seppia); }
+  .oggi .corpo { padding: 12px 14px 4px; }
+  .oggi .corpo .card { border: 0; padding: 0; margin: 6px 0 0; }
+  .etichetta { display:inline-block; background: var(--oro); color:#2b1d00; font-size: 13px; font-weight:700; padding: 3px 10px; border-radius: 999px; }
+
+  /* Schede prodotto */
+  .card { background:#fff; border: 1px solid var(--bordo); border-radius: 16px; padding: 12px; margin-bottom: 12px;
+          display:grid; grid-template-columns: 92px 1fr; grid-template-areas: "foto info" "foto controlli" "scelte scelte"; column-gap: 14px; row-gap: 10px; align-items:start; }
+  .card.senza-foto { grid-template-columns: 1fr; grid-template-areas: "info" "controlli" "scelte"; }
+  .foto-pulsante { grid-area: foto; background:none; border:0; padding:0; cursor:zoom-in; }
+  .foto-pulsante img, .card img { display:block; width: 92px; height: 92px; border-radius: 12px; object-fit: cover; background: var(--seppia); }
+  .info { grid-area: info; min-width:0; }
+  .nome { font: 700 19px/1.2 var(--serif); }
+  .apri-carta { cursor: pointer; }
+  .desc { font-size: 14px; color: var(--grigio); margin-top:4px; }
+  .desc:empty { display:none; }
+  .prezzo { display:inline-block; margin-top: 8px; padding: 3px 10px 4px; background: var(--seppia); border-radius: 6px; transform: rotate(-2deg); box-shadow: 1px 2px 0 rgba(27,47,78,.16); font: 700 18px var(--serif); white-space:nowrap; }
+  .prezzo small { font: 400 13px system-ui, sans-serif; color: var(--grigio); }
+  .info p { margin: 8px 0 0; font-size: 14px; }
+  .trace { font-size: 13px; color: var(--grigio); margin-top: 8px; line-height: 1.4; }
+  .scheda-link { display:block; background:none; border:0; padding: 6px 0 0; color: var(--blu); font-size: 14px; font-weight:600; text-decoration: underline; text-underline-offset: 3px; cursor:pointer; }
+  .controlli { grid-area: controlli; display:flex; align-items:center; gap: 10px; }
+  .btn { width:44px; height:44px; border-radius:50%; border: 1.5px solid var(--blu); background:#fff; color: var(--blu); font-size:24px; line-height:1; cursor:pointer; display:grid; place-items:center; padding:0; }
+  .btn.piu { background: var(--oro); border-color: var(--oro); color:#2b1d00; font-weight:700; }
+  .btn:disabled, .btn.piu:disabled { background:#eef1f3; border-color:#dde3e7; color:#a3afb8; cursor:default; }
+  .qta { min-width: 64px; text-align:center; font-weight:700; }
+  .scelte { grid-area: scelte; border-top: 1px dashed var(--bordo); padding-top: 10px; font-size: 14px; }
+  .scelte:not(:has(*)) { display:none; }
+  .scelte small { color: var(--grigio); }
+  .pesi { display:flex; gap:8px; flex-wrap:wrap; margin: 4px 0 8px; }
+  .pesi button { padding: 10px 14px; border: 1.5px solid var(--blu); border-radius: 999px; background:#fff; color: var(--blu); font-weight:600; cursor:pointer; min-height: 44px; }
+  .pesi button[aria-pressed="true"] { background: var(--blu); color:#fff; }
+  .pesi button:disabled { opacity:.45; cursor:default; }
+  .scelte label { display:block; font-size:14px; color: var(--grigio); margin: 8px 0 4px; }
+  .scelte label select { margin-top: 4px; color: var(--blu); }
+  .card.esaurito { opacity: .6; }
+  .tag-esaurito { display:inline-block; background:#b0412e; color:#fff; font: 700 11px system-ui, sans-serif; padding: 3px 8px; border-radius: 999px; vertical-align: middle; margin-left: 6px; letter-spacing:.02em; }
+  .ordini-cat { margin: -6px 2px 12px; font-size: 14px; color: #7d5400; font-weight: 700; }
+  .consiglio { background: #fff8e8; border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  .consiglio p { margin: 4px 0 0; white-space:pre-wrap; }
+
+  /* Ritiro e dati */
+  .ritiro { background:#fff; border: 1px solid var(--bordo); border-radius:16px; padding: 6px 14px 16px; }
+  .ritiro label { display:block; font-size: 14px; font-weight:600; color: var(--grigio); margin: 12px 0 6px; }
+  select, textarea, input { width:100%; padding: 12px; min-height: 48px; font-size:16px; border:1.5px solid var(--bordo); border-radius:10px; background:#fff; color: var(--blu); }
+  textarea { min-height: 72px; }
+  .come { background:#fff; border: 1px solid var(--bordo); border-radius:16px; padding: 14px 16px; margin-top: 10px; font-size: 15px; line-height: 1.5; }
+  .come ol { margin:0; padding-left: 22px; }
+  .come li { margin: 4px 0; }
+  .come li::marker { font-family: var(--serif); font-weight: 700; }
+  #avvisoMenu { margin-top: 14px; background: var(--seppia); border: 0; font-size: 14px; }
+
+  /* Barra del carrello */
+  .barra { position: fixed; left:0; right:0; bottom:0; z-index: 10; background: var(--blu); color:#fff; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display:flex; align-items:center; justify-content:space-between; gap:12px; box-shadow: 0 -6px 18px rgba(27,47,78,.18); }
   .barra .tot { font-size: 15px; }
-  .barra button { background: var(--oro); color:#222; border:0; border-radius:10px; padding: 13px 18px; font-weight:700; font-size:16px; cursor:pointer; }
-  .barra button:disabled { background:#6d7f93; color:#dfe6ee; cursor:default; }
-  .modale { position: fixed; inset: 0; background: rgba(0,0,0,.45); display:none; align-items:flex-end; justify-content:center; }
+  .barra .tot strong { font: 700 20px var(--serif); display:block; }
+  .barra button { background: var(--oro); color:#2b1d00; border:0; border-radius:12px; padding: 14px 20px; font-weight:700; font-size:17px; cursor:pointer; }
+  .barra button:disabled { background:#4a5d78; color:#c6d0dc; cursor:default; }
+
+  /* Fogli: riepilogo e scheda */
+  .modale { position: fixed; inset: 0; z-index: 30; background: rgba(15,27,45,.5); display:none; align-items:flex-end; justify-content:center; }
   .modale.aperta { display:flex; }
-  .foglio { background:#fff; width:100%; max-width:640px; border-radius: 16px 16px 0 0; padding: 18px 16px 24px; max-height: 88vh; overflow:auto; }
-  .foglio h3 { margin: 0 0 10px; color: var(--blu); }
-  .riepilogo { white-space: pre-wrap; background:#f4f4f4; border-radius:8px; padding:12px; font-size:14px; line-height:1.45; }
+  .foglio { position:relative; background:#fff; width:100%; max-width:640px; border-radius: 20px 20px 0 0; padding: 26px 16px calc(24px + env(safe-area-inset-bottom)); max-height: 90vh; overflow:auto; }
+  .foglio::before { content:""; position:absolute; top:9px; left:50%; width:44px; height:5px; margin-left:-22px; border-radius:3px; background: var(--bordo); }
+  .foglio h3 { margin: 0 0 12px; font: 700 22px var(--serif); color: var(--blu); }
+  .riepilogo { white-space: pre-wrap; background: var(--ghiaccio); border-radius:10px; padding:12px; font-size:14px; line-height:1.5; }
   .azioni { display:flex; gap:10px; margin-top:14px; }
-  .azioni a, .azioni button { flex:1; text-align:center; text-decoration:none; padding:14px; border-radius:10px; font-weight:700; font-size:16px; border:0; cursor:pointer; }
-  .wa { background:#25d366; color:#fff; }
-  .copia { background:#e8e8e8; color:#222; }
-  .chiudi { display:block; margin:12px auto 0; background:none; border:0; color:var(--grigio); font-size:14px; cursor:pointer; }
+  .azioni a, .azioni button { flex:1; display:grid; place-items:center; text-align:center; text-decoration:none; padding:14px; min-height: 52px; border-radius:12px; font-weight:700; font-size:16px; border:0; cursor:pointer; }
+  .wa { background:#1e8a4c; color:#fff; }
+  #inviaOrdine { background: var(--oro); color:#2b1d00; font-size: 18px; }
+  #inviaOrdine:disabled { background:#eef1f3; color:#a3afb8; }
+  #linkWa { background:#fff; color:#1e8a4c; border: 1.5px solid #1e8a4c; font-size: 15px; }
+  .copia { background: var(--ghiaccio); color: var(--blu); }
+  .chiudi { display:block; margin:14px auto 0; background:none; border:0; color: var(--grigio); font-size:15px; text-decoration: underline; cursor:pointer; }
   .errore { background:#fdecea; color:#8a1c12; padding: 14px; border-radius: 10px; margin-top: 16px; font-size: 14px; }
-  .card.esaurito { opacity: .55; }
-  .apri-carta { cursor: pointer; border-bottom: 1px dotted var(--blu); }
-  .carta-foto { width: 100%; max-height: 60vh; object-fit: contain; background: #fff; border-radius: 10px; }
+  .carta-foto { width: 100%; max-height: 38vh; object-fit: cover; background: var(--seppia); border-radius: 12px; }
   .carta-dati { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 14px; margin: 12px 0; }
   .carta-dati dt { color: var(--grigio); }
-  .carta-dati dd { margin: 0; font-weight: 600; }
-  .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
-  .consiglio p { margin: 4px 0 0; white-space:pre-wrap; }
-  .scheda-link { background:transparent; border:1px solid var(--blu); border-radius:8px; padding:8px 10px; margin-top:8px; font:inherit; color:var(--blu); cursor:pointer; }
-  .foto-pulsante { background:none;border:0;padding:0;cursor:zoom-in;flex:none; }
-  .foto-pulsante img { display:block; }
-  .carta-dati dd { overflow-wrap:anywhere; }
-  .azioni-carta { display: flex; gap: 10px; margin-top: 14px; }
-  .principale-carta { flex: 2; background: var(--oro); color: #222; border: 0; border-radius: 10px; padding: 13px; font-weight: 700; font-size: 16px; cursor: pointer; }
-  .chiudi-carta { flex: 1; background: #e8e8e8; color: #222; border: 0; border-radius: 10px; padding: 13px; font-size: 15px; cursor: pointer; }
-  .ordini-cat { margin: -4px 4px 10px; font-size: 13px; color: #8a5a00; font-weight: 700; }
-  .tag-esaurito { display:inline-block; background:#b3261e; color:#fff; font-size:11px; padding:2px 7px; border-radius: 999px; vertical-align: middle; margin-left: 6px; }
-  .trace { font-size: 12px; color: var(--grigio); margin-top: 6px; line-height: 1.4; }
-  .arrivare { display:inline-block; margin-top:10px; background: var(--blu); color:#fff; text-decoration:none; padding: 10px 16px; border-radius: 8px; font-weight:700; font-size: 14px; }
-  footer { text-align:center; font-size:12px; color: var(--grigio); padding: 24px 12px; }
-.banner-festa{padding:22px;border-radius:16px;margin:12px 0 22px;background:#174b39;color:#fff;border:2px solid #d4ad60;box-shadow:0 4px 12px #0002}.banner-festa h2{color:inherit;margin:8px 0;font-size:26px}.banner-festa a{display:inline-block;padding:12px 18px;border-radius:8px;background:#fff;color:#17313b;font-weight:bold;text-decoration:none}.banner-festa p{margin:10px 0}.banner-festa .ricorrenza{letter-spacing:.08em;text-transform:uppercase;font-size:13px}#menu-festivita{scroll-margin-top:20px}
+  .carta-dati dd { margin: 0; font-weight: 600; overflow-wrap:anywhere; }
+  .azioni-carta { display: flex; gap: 10px; margin-top: 16px; }
+  .principale-carta { flex: 2; background: var(--oro); color: #2b1d00; border: 0; border-radius: 12px; padding: 14px; font-weight: 700; font-size: 16px; cursor: pointer; }
+  .principale-carta:disabled { background:#eef1f3; color:#a3afb8; }
+  .chiudi-carta { flex: 1; background: var(--ghiaccio); color: var(--blu); border: 0; border-radius: 12px; padding: 14px; font-size: 15px; cursor: pointer; }
+  #cartaCorpo .card, #cartaCorpo .scelte { border:0; padding:0; }
+
+  footer { text-align:center; font-size:14px; color: var(--grigio); padding: 28px 12px; line-height: 1.6; }
+  .arrivare { display:inline-block; margin-top:10px; background: var(--blu); color:#fff; text-decoration:none; padding: 12px 18px; border-radius: 10px; font-weight:700; font-size: 15px; }
+.banner-festa{padding:22px;border-radius:18px;margin:16px 0 18px;background:#174b39;color:#fff;border:2px solid #d4ad60;box-shadow:0 6px 16px rgba(15,27,45,.18)}.banner-festa h2{color:inherit;margin:8px 0;font-size:28px}.banner-festa a{display:inline-block;padding:12px 18px;border-radius:8px;background:#fff;color:#17313b;font-weight:bold;text-decoration:none}.banner-festa p{margin:10px 0}.banner-festa .ricorrenza{font-size:14px;font-weight:600;opacity:.9}#menu-festivita{scroll-margin-top:64px}
 
 /* Decorative animation: text and ordering controls remain still. */
 .banner-festa{position:relative;overflow:hidden;isolation:isolate}
@@ -106,6 +147,7 @@
   <span>✔ Ordini entro <b id="entro">18:00 del giorno prima</b></span>
   <span>✔ Pagamento al ritiro</span>
 </div>
+<nav class="categorie" id="categorie" aria-label="Sezioni del menu"></nav>
 
 <main>
   <div id="errore"></div>
@@ -114,7 +156,7 @@
   <div id="oggi"></div>
   <div id="menu"></div>
 
-  <h2>Scegli il ritiro</h2>
+  <h2 id="ritiro">Scegli il ritiro</h2>
   <div class="ritiro">
     <label for="giorno">Giorno di ritiro</label>
     <select id="giorno"></select>
@@ -144,7 +186,7 @@
 
 <p id="messaggio" class="messaggio" role="alert" hidden></p>
 <div class="barra">
-  <div class="tot"><span id="conteggio">0</span> articoli · <strong id="totale">0,00 €</strong></div>
+  <div class="tot"><span id="conteggio">0</span> articoli <strong id="totale">0,00 €</strong></div>
   <button id="ordina" disabled>Ordina e ritira</button>
 </div>
 
@@ -267,7 +309,7 @@ function cardHtml(v) {
   const esaurito = nonOrdinabile(v);
   const unita = v.unita ? ` <small>/ ${v.unita}</small>` : "";
   const foto = v.foto ? `<button class="foto-pulsante" onclick="apriCarta('${v.id}')" aria-label="Apri la scheda di ${escapa(v.nome)}"><img src="${escapa(v.foto)}" alt="${escapa(v.nome)}" loading="lazy"></button>` : "";
-  return `<div class="card${esaurito ? " esaurito" : ""}">
+  return `<div class="card${esaurito ? " esaurito" : ""}${v.foto ? "" : " senza-foto"}">
     ${foto}
     <div class="info">
       <div class="nome"><span class="apri-carta" onclick="apriCarta('${v.id}')">${escapa(v.nome)}</span>${esaurito ? ` <span class="tag-esaurito">${motivoNonOrdinabile(v)==="chiuso"?"PRENOTAZIONI CHIUSE":"ESAURITO"}</span>` : ""}</div>
@@ -333,8 +375,10 @@ function render() {
     </div>` : "";
 
   document.getElementById("menu").innerHTML = menu.categorie.filter(c=>c.id!=="natale"&&categoriaAttiva(c)).map(c =>
-    `<section><h2>${escapa(c.nome)}</h2>${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")+"</section>"
+    `<section id="cat-${escapa(c.id)}"><h2>${escapa(c.nome)}</h2>${c.ordini_entro ? `<p class="ordini-cat">Ordini entro ${escapa(c.ordini_entro)}</p>` : ""}` + c.voci.filter(v => v.disponibile && v.stato !== "terminato").map(cardHtml).join("")+"</section>"
   ).join("");
+  const sezioni=menu.categorie.filter(c=>c.id!=="natale"&&categoriaAttiva(c)&&c.voci.some(v=>v.disponibile&&v.stato!=="terminato"));
+  document.getElementById("categorie").innerHTML=sezioni.length>1?sezioni.map(c=>`<a href="#cat-${escapa(c.id)}">${escapa(c.nome)}</a>`).join("")+'<a href="#ritiro">Ritiro</a>':"";
   aggiornaTotali();
   if(cartaApertaId)apriCarta(cartaApertaId);
 }
