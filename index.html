@@ -186,7 +186,7 @@ function festaChiusa(c){
  const now=new Date(),date=now.toLocaleDateString('sv-SE',{timeZone:'Europe/Rome'}),time=now.toLocaleTimeString('it-IT',{timeZone:'Europe/Rome',hour:'2-digit',minute:'2-digit',hour12:false});
  return date>c.scadenza_data||(date===c.scadenza_data&&time>(c.scadenza_ora||'00:00'));
 }
-const nonOrdinabile = v => {const c=menu?.categorie.find(c=>c.voci.some(x=>x.id===v.id));return !v.disponibile||["esaurito","terminato"].includes(v.stato)||(c&&(!categoriaAttiva(c)||festaChiusa(c)||(c.id==="natale"&&!supportaFestivita)));};
+const nonOrdinabile = v => {const c=menu?.categorie.find(c=>c.voci.some(x=>x.id===v.id));return (typeof v.stock_available==="number"&&v.stock_available<=0)||!v.disponibile||["esaurito","terminato"].includes(v.stato)||(c&&(!categoriaAttiva(c)||festaChiusa(c)||(c.id==="natale"&&!supportaFestivita)));};
 const escapa = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 // Riga di tracciabilità: compare solo per i campi compilati
 function traccia(v) {
@@ -213,6 +213,7 @@ function cardHtml(v) {
       <div class="nome"><span class="apri-carta" onclick="apriCarta('${v.id}')">${escapa(v.nome)}</span>${esaurito ? ' <span class="tag-esaurito">ESAURITO</span>' : ""}</div>
       <div class="desc">${escapa(v.descrizione || "")}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}${v.porzione ? ` · Porzione: ${v.porzione}` : ""}</div>
       <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
+      ${typeof v.stock_available==="number"?`<p>Disponibili da prenotare: <b>${escapa(v.stock_available)} ${escapa(v.unita||"porzioni")}</b></p>`:""}
       ${traccia(v)}
       <button class="scheda-link" onclick="apriCarta('${v.id}')">Scheda e provenienza</button>
     </div>
@@ -236,7 +237,7 @@ function scelteVoce(v,q){
  ${v.consiglio?`<p class="consiglio"><b>Il consiglio di Massimo:</b> ${escapa(v.consiglio)}</p>`:""}
  </div>`;
 }
-function scegliPeso(id,q){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce))return;carrello[id]={voce,qta:q,preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||""};aggiornaOrari();render();}
+function scegliPeso(id,q){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||(typeof voce.stock_available==="number"&&q>voce.stock_available))return;carrello[id]={voce,qta:q,preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||""};aggiornaOrari();render();}
 function scegliPreparazione(id,value){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||!voce.preparazioni?.includes(value))return;if(!carrello[id])carrello[id]={voce,qta:voce.unita==="kg"?.5:1};carrello[id].preparazione=value;aggiornaOrari();render();}
 
 // Una categoria con periodo compare solo nelle date impostate; senza date resta nascosta
@@ -285,6 +286,7 @@ function cambia(id, delta) {
   // kg: mezzo chilo per tocco; etto: un etto per tocco
   const passo = voce.unita === "kg" ? 0.5 : 1;
   const nuova = Math.max(0, Math.round((attuale + delta * passo) * 100) / 100);
+  if(delta>0&&typeof voce.stock_available==="number"&&nuova>voce.stock_available){alert("Quantità disponibile: "+voce.stock_available+" "+(voce.unita||"porzioni"));return;}
   if (nuova === 0) delete carrello[id];
   else carrello[id] = { voce, qta: nuova, preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||"" };
   aggiornaOrari();

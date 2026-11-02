@@ -113,6 +113,58 @@ async function rateLimit(request,env){
   if(row.count>max)fail('Troppi tentativi. Attendi qualche minuto o contatta la pescheria.',429);
  }
 }
+
+// Fixed point quantities: 1000 units = 1 kg or 1 portion/piece.
+const STOCK_SQL=[
+ `CREATE TABLE IF NOT EXISTS inventory(product_id TEXT PRIMARY KEY,units INTEGER NOT NULL DEFAULT 0 CHECK(units>=0))`,
+ `CREATE TABLE IF NOT EXISTS stock_moves(id TEXT PRIMARY KEY,product_id TEXT NOT NULL,delta INTEGER NOT NULL,kind TEXT NOT NULL,created_at TEXT NOT NULL)`,
+ `CREATE TABLE IF NOT EXISTS stock_reservations(order_id TEXT NOT NULL,product_id TEXT NOT NULL,units INTEGER NOT NULL,active INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(order_id,product_id))`,
+ `CREATE TRIGGER IF NOT EXISTS stock_move_apply AFTER INSERT ON stock_moves BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM inventory WHERE product_id=NEW.product_id AND units+NEW.delta>=0) THEN RAISE(ABORT,'STOCK_UNAVAILABLE') END;
+ UPDATE inventory SET units=units+NEW.delta WHERE product_id=NEW.product_id; END`,
+ `CREATE TRIGGER IF NOT EXISTS stock_reserve_apply AFTER INSERT ON stock_reservations BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM inventory WHERE product_id=NEW.product_id AND units>=NEW.units) THEN RAISE(ABORT,'STOCK_UNAVAILABLE') END;
+ UPDATE inventory SET units=units-NEW.units WHERE product_id=NEW.product_id; END`,
+ `CREATE TRIGGER IF NOT EXISTS stock_reservation_change AFTER UPDATE OF active ON stock_reservations WHEN NEW.active!=OLD.active BEGIN
+ SELECT CASE WHEN NEW.active=1 AND NOT EXISTS(SELECT 1 FROM inventory WHERE product_id=NEW.product_id AND units>=NEW.units) THEN RAISE(ABORT,'STOCK_UNAVAILABLE') END;
+ UPDATE inventory SET units=units+CASE WHEN NEW.active=0 THEN NEW.units ELSE -NEW.units END WHERE product_id=NEW.product_id; END`,
+ `CREATE TRIGGER IF NOT EXISTS stock_order_insert AFTER INSERT ON orders WHEN NEW.status!='cancelled' BEGIN
+ INSERT INTO stock_reservations(order_id,product_id,units) SELECT NEW.id,json_extract(j.value,'$.id'),CAST(ROUND(json_extract(j.value,'$.quantity')*1000) AS INTEGER) FROM json_each(NEW.items_json) j JOIN inventory i ON i.product_id=json_extract(j.value,'$.id'); END`,
+ `CREATE TRIGGER IF NOT EXISTS stock_order_status AFTER UPDATE OF status ON orders WHEN (NEW.status='cancelled')!=(OLD.status='cancelled') BEGIN
+ UPDATE stock_reservations SET active=CASE WHEN NEW.status='cancelled' THEN 0 ELSE 1 END WHERE order_id=NEW.id; END`
+];
+async function ensureStock(db){for(const sql of STOCK_SQL)await db.prepare(sql).run();}
+function stockFailure(e){return String(e?.message||e).includes('STOCK_UNAVAILABLE');}
+async function stockApi(request,env,url){
+ if(!url.pathname.startsWith('/api/stock'))return null;
+ if(url.pathname==='/api/stock'&&request.method==='GET'){
+  const menu=await readMenu(),rows=(await env.db.prepare('SELECT * FROM inventory').all()).results;
+  const reserved=(await env.db.prepare("SELECT product_id,SUM(units) units FROM stock_reservations r JOIN orders o ON o.id=r.order_id WHERE r.active=1 AND o.status IN ('new','confirmed','ready') GROUP BY product_id").all()).results;
+  const map=new Map(rows.map(x=>[x.product_id,x.units]));
+  const products=menu.categorie.flatMap(c=>c.voci.map(v=>({id:v.id,name:v.nome,unit:v.unita||'porzioni',managed:map.has(v.id),available:map.has(v.id)?map.get(v.id)/1000:null,reserved:(reserved.find(r=>r.product_id===v.id)?.units||0)/1000})));
+  return json({products});
+ }
+ if(url.pathname==='/api/stock'&&request.method==='POST'){
+  const raw=await request.text();if(raw.length>2000)return json({errore:'Richiesta troppo grande'},413);
+  let b;try{b=JSON.parse(raw);}catch{return json({errore:'Dati non validi'},400);}
+  if(!b||!isUuid(b.id)||typeof b.product_id!=='string'||!Number.isSafeInteger(b.units)||b.units<=0||b.units>100000000||!['arrival','counter'].includes(b.kind))return json({errore:'Movimento di magazzino non valido'},400);
+  const delta=b.kind==='counter'?-b.units:b.units;
+  const prior=await env.db.prepare('SELECT * FROM stock_moves WHERE id=?').bind(b.id).first();
+  if(prior)return prior.product_id===b.product_id&&prior.delta===delta&&prior.kind===b.kind?json({ok:true}):json({errore:'Codice movimento già usato'},409);
+  const menu=await readMenu(),v=menu.categorie.flatMap(c=>c.voci).find(v=>v.id===b.product_id);
+  if(!v)return json({errore:'Prodotto non trovato nel menu'},404);
+  if(v.unita!=='kg'&&b.units%1000!==0)return json({errore:'Per questo prodotto inserisci un numero intero di pezzi o porzioni'},400);
+  await env.db.batch([
+   env.db.prepare('INSERT OR IGNORE INTO inventory(product_id,units) VALUES (?,0)').bind(b.product_id),
+   env.db.prepare('INSERT OR IGNORE INTO stock_moves(id,product_id,delta,kind,created_at) VALUES (?,?,?,?,?)').bind(b.id,b.product_id,delta,b.kind,new Date().toISOString())
+  ]);
+  const saved=await env.db.prepare('SELECT * FROM stock_moves WHERE id=?').bind(b.id).first();
+  if(!saved||saved.product_id!==b.product_id||saved.delta!==delta||saved.kind!==b.kind)return json({errore:'Movimento in conflitto'},409);
+  return json({ok:true});
+ }
+ return json({errore:'Operazione magazzino non disponibile'},404);
+}
+
 async function publicApi(request,env){
  const url=new URL(request.url),origin=request.headers.get('Origin');
  const cors=origin===CLIENT_ORIGIN?{'Access-Control-Allow-Origin':CLIENT_ORIGIN,'Vary':'Origin'}:{};
@@ -121,8 +173,9 @@ async function publicApi(request,env){
  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...cors,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}});
  try{
   if(!env.db || typeof env.ADMIN_TOKEN!=='string' || env.ADMIN_TOKEN.length<20)fail('Ordini online non ancora configurati',503);
+  await ensureStock(env.db);
   if(url.pathname==='/api/config' && request.method==='GET'){
-   const menu=await readMenu();return respond({ok:true,menu,preparations_supported:true,festivities_supported:true,days:pickupDays(menu,new Date())});
+   const menu=await readMenu();const stock=(await env.db.prepare('SELECT * FROM inventory').all()).results;for(const c of menu.categorie)for(const v of c.voci){const row=stock.find(x=>x.product_id===v.id);if(row)v.stock_available=row.units/1000;}return respond({ok:true,menu,stock_supported:true,preparations_supported:true,festivities_supported:true,days:pickupDays(menu,new Date())});
   }
   if(url.pathname!=='/api/submit' || request.method!=='POST')return respond({errore:'Operazione non disponibile'},404);
   if(!origin)fail('Invia l’ordine dal sito della pescheria',403);
@@ -135,7 +188,7 @@ async function publicApi(request,env){
   const result=await env.db.prepare('INSERT INTO orders (id,customer_name,customer_phone,pickup_date,pickup_time,notes,items_json,total_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING').bind(priced.id,priced.customer_name,priced.customer_phone,priced.pickup_date,priced.pickup_time,priced.notes,JSON.stringify(priced.items),priced.total_cents).run();
   if(!result.meta.changes){const row=await env.db.prepare('SELECT * FROM orders WHERE id = ?').bind(priced.id).first();if(!row||!sameOrder(row,order))fail('Codice ordine già utilizzato',409);}
   return respond({ok:true,id:priced.id,total_cents:priced.total_cents},201);
- }catch(e){return respond({errore:e.status?e.message:'Servizio momentaneamente non disponibile. Riprova con lo stesso ordine.'},e.status||503);}
+ }catch(e){if(stockFailure(e))return respond({errore:'Quantità non più disponibile. Aggiorna il menu e riduci la quantità: nessun ordine è stato registrato.'},409);return respond({errore:e.status?e.message:'Servizio momentaneamente non disponibile. Riprova con lo stesso ordine.'},e.status||503);}
 }
 
 // Pescheria Massimo: pannello ordini protetto. Binding D1: db.
@@ -210,6 +263,8 @@ export default {
   if(!await authorized(request,env)) return json({errore:"Chiave di accesso non valida"},401);
   if(!env.db) return json({errore:"Database non collegato"},503);
   try{
+   await ensureStock(env.db);
+   const stockResponse=await stockApi(request,env,url);if(stockResponse)return stockResponse;
    await env.db.prepare(PAYMENT_SCHEMA).run();
    await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_order ON payment_events(order_id)").run();
    await env.db.prepare("CREATE INDEX IF NOT EXISTS payment_events_day ON payment_events(business_date,created_at)").run();
@@ -247,7 +302,7 @@ export default {
     return result.meta.changes?json({ok:true}):json({errore:"Ordine non trovato"},404);
    }
    return json({errore:"Operazione non disponibile"},404);
-  }catch{return json({errore:"Impossibile leggere o aggiornare l’archivio. Riprova."},503);}
+  }catch(e){if(stockFailure(e))return json({errore:"Quantità insufficiente. Aggiorna le disponibilità: nessuna modifica è stata salvata."},409);return json({errore:"Impossibile leggere o aggiornare l’archivio. Riprova."},503);}
  }
 };
 const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -255,7 +310,7 @@ const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="v
 <style>body{font:17px system-ui;margin:auto;padding:20px;max-width:850px;background:#f1f5f7;color:#17313b}input,button,select{font:inherit;padding:12px;border:1px solid #a9bbc1;border-radius:8px;margin:4px 0;max-width:100%;box-sizing:border-box}button{background:#075e71;color:white;cursor:pointer}button:disabled{opacity:.6}article{background:white;padding:18px;margin:16px 0;border-radius:12px}h1{font-size:26px}h2{font-size:21px}p{overflow-wrap:anywhere}#msg{white-space:pre-wrap}small{overflow-wrap:anywhere}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}label{display:block;margin:10px 0}#key{width:100%}</style>
 <h1>Ordini · Pescheria Massimo</h1>
 <form id="login"><label>Chiave di accesso<input id="key" type="password" autocomplete="current-password" required minlength="20"></label><label><input id="showKey" type="checkbox"> Mostra password</label><label><input id="rememberAccess" type="checkbox"> Ricordami su questo dispositivo</label><button id="loginButton">Accedi</button><p>Se selezioni Ricordami, la chiave viene conservata in questo browser. Chi usa questo browser potrà aprire gli ordini. Esci cancella l'accesso salvato.</p></form>
-<section id="panel" hidden><p id="sessionStatus"></p><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><details><summary>Suono personalizzato</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details><div id="orders"></div></section>
+<section id="panel" hidden><p id="sessionStatus"></p><div class="bar"><label>Mostra <select id="view"><option value="open">Da gestire · tutte le date</option><option value="all">Tutti · anche ritirati e annullati</option></select></label><label>Data ritiro (facoltativa) <input id="day" type="date"></label><button id="clearDay">Tutte le date</button><button id="refresh">Aggiorna</button><button id="logout">Esci</button></div><button id="enableAlerts" type="button">Attiva avvisi</button><p id="alertStatus">Avvisi disattivati. Lascia aperto questo pannello.</p><details><summary>Suono personalizzato</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details><p id="newOrders" role="alert" hidden></p><p id="scope"></p><p id="totals"></p><details><summary>Disponibilità e vendite al banco</summary><button id="stockLoad" type="button">Aggiorna disponibilità</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Le quantità sono condivise da tutti i giorni di ritiro. Aggiungi solo il pesce libero da prenotazioni già esistenti. Gli ordini precedenti all’attivazione non vengono scalati. Ogni nuovo ordine prenota subito la quantità; Annullato la restituisce. Ritirato resta scalato. Registra le vendite al banco per mantenere corretto il residuo. I prodotti senza carico restano senza limite.</p></details><details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details><div id="orders"></div></section>
 <p id="msg" role="status" aria-live="polite"></p>
 <script>
 let token="",loadSeq=0,alertAudio=null,alertsEnabled=false,polling=false,mutations=0;
@@ -308,7 +363,7 @@ async function api(path,options={}){
  }catch(e){if(controller.signal.aborted)throw new Error("Il servizio non risponde entro 15 secondi. Riprova: nessun ordine è stato cancellato.");throw e;}
  finally{clearTimeout(timer);}
 }
-function exit(){authGeneration++;loginBusy=false;$("loginButton").disabled=false;const cleared=removeSavedAccess();rememberWanted=false;$("rememberAccess").checked=false;ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;return cleared;}
+function exit(){$("stockProducts").replaceChildren();$("stockMsg").textContent="";authGeneration++;loginBusy=false;$("loginButton").disabled=false;const cleared=removeSavedAccess();rememberWanted=false;$("rememberAccess").checked=false;ordersBaseline=false;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;return cleared;}
 async function load(){
  const seq=++loadSeq;
  $("orders").replaceChildren();$("totals").textContent="";$("scope").textContent="";
@@ -379,6 +434,27 @@ async function load(){
 }
 
 
+
+$("stockLoad").onclick=async()=>{
+ const generation=authGeneration;$("stockLoad").disabled=true;$("stockMsg").textContent="Caricamento disponibilità…";
+ try{
+  const data=await api('/api/stock');if(generation!==authGeneration||!token)return;
+  $("stockProducts").replaceChildren();
+  for(const p of data.products){
+   const row=element('article','');row.append(element('h3',p.name),element('p',p.managed?'Disponibile da vendere: '+p.available+' '+p.unit+' · Prenotato da preparare: '+p.reserved+' '+p.unit:'Quantità senza limite: nessun carico registrato.'));
+   const form=element('form',''),qty=element('input','');qty.type='number';qty.min=p.unit==='kg'?'0.001':'1';qty.step=p.unit==='kg'?'0.001':'1';qty.required=true;qty.setAttribute('aria-label','Quantità in '+p.unit);qty.placeholder='Quantità in '+p.unit;
+   const kind=element('select','');for(const [value,label] of [['arrival','Aggiungi arrivo disponibile'],['counter','Scala vendita al banco']]){const opt=element('option',label);opt.value=value;kind.append(opt);}
+   const button=element('button','Registra movimento');form.append(qty,kind,button);let id='',signature='';
+   form.onsubmit=async e=>{
+    e.preventDefault();const units=Math.round(Number(qty.value)*1000);const next=p.id+':'+kind.value+':'+units;if(next!==signature){id=crypto.randomUUID();signature=next;}
+    if(!confirm((kind.value==='arrival'?'Aggiungere ':'Scalare ')+qty.value+' '+p.unit+' per '+p.name+'?'))return;
+    mutations++;button.disabled=true;
+    try{await api('/api/stock',{method:'POST',body:JSON.stringify({id,product_id:p.id,units,kind:kind.value})});await $("stockLoad").onclick();}catch(e){$("stockMsg").textContent=e.message;button.disabled=false;}finally{mutations--;}
+   };row.append(form);$("stockProducts").append(row);
+  }
+  $("stockMsg").textContent="Disponibilità aggiornate. Le quantità già prenotate sono escluse dal disponibile.";
+ }catch(e){$("stockMsg").textContent=e.message;}finally{$("stockLoad").disabled=false;}
+};
 let reportData=null;
 const todayParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
 $("reportDay").value=['year','month','day'].map(t=>todayParts.find(p=>p.type===t).value).join('-');
