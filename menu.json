@@ -217,9 +217,9 @@
         },
         {
           "id": "trancio-tonno",
-          "nome_scientifico": "",
-          "zona_fao": "",
-          "metodo": "",
+          "nome_scientifico": "Thunnus thynnus",
+          "zona_fao": "Italia",
+          "metodo": "Allevato",
           "provenienza": "",
           "data_arrivo": "",
           "attrezzo": "",
