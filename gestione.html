@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="gestione-guidata-20261102">
+<meta name="pm-release" content="gestione-semplice-20261102">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Pescheria da Massimo</title>
 <style>
@@ -58,6 +58,18 @@
 .testa-voce{display:flex;gap:12px;align-items:flex-end}.testa-voce .campi{flex:1}.pollice{width:64px;height:64px;border-radius:10px;object-fit:cover;flex:none;background:#efe4d3}.pollice.vuoto{display:grid;place-items:center;font-size:12px;color:var(--grigio)}
 .voce.spenta{opacity:.7}.esito-scheda{margin:8px 0 0;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600}.esito-scheda.ok{background:#e6f4ea;color:var(--verde)}.esito-scheda.manca{background:#fff4d9;color:#7d5400}
 .riga-termine{display:flex;gap:8px}.riga-termine>*{flex:1}.avviso{color:#7d5400}.azioni-voce{display:flex;gap:8px;margin-top:12px}.azioni-voce>*{flex:1;margin:0}
+#cercaProdotto{margin-bottom:6px}.cat-testa{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px;border-bottom:2px solid var(--blu);padding-bottom:6px}.cat-testa h3{margin:0;font-size:17px}.cat-testa button{padding:9px 14px}
+.riga-voce{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center;padding:10px 0;border-bottom:1px solid #eee}.riga-voce.spenta .riga-testo b{color:var(--grigio)}
+.riga-apri{display:flex;align-items:center;gap:10px;min-width:0;background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer}.riga-apri .pollice{width:52px;height:52px}
+.riga-testo{display:grid;gap:4px;min-width:0}.riga-testo b{font-size:16px;overflow-wrap:anywhere}.riga-badge{display:flex;flex-wrap:wrap;gap:4px}
+.badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px}.badge.grigio{background:#eceff1;color:#56677a}.badge.giallo{background:#fff4d9;color:#7d5400}.badge.link{color:var(--blu);text-decoration:underline;padding-left:0}
+.riga-comandi{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.riga-prezzo{display:flex;align-items:center;gap:4px;margin:0}.riga-prezzo input{width:84px;padding:8px;text-align:right}.riga-prezzo small{color:var(--grigio)}
+.interruttore{display:inline-flex;align-items:center;gap:6px;margin:0;white-space:nowrap;font-size:13px;color:var(--blu);cursor:pointer}.interruttore input[type="checkbox"]{flex:none;padding:0;border:0;appearance:none;-webkit-appearance:none;width:44px;height:26px;border-radius:999px;background:#c8d4d9;position:relative;margin:0;cursor:pointer;transition:background .15s}.interruttore input[type="checkbox"]::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}.interruttore input[type="checkbox"]:checked{background:#1e8e3e}.interruttore input[type="checkbox"]:checked::after{left:21px}
+.scelta.mini{min-height:34px;padding:5px 10px;font-size:13px}
+.testa-foglio{position:sticky;top:-18px;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;margin:-18px -16px 8px;padding:14px 16px;border-bottom:1px solid #eee}.testa-foglio h3{margin:0;font-size:18px;color:var(--blu)}.testa-foglio button{width:auto;padding:10px 18px}
+.giorno-apertura{padding:10px 0;border-bottom:1px solid #eee}.giorno-apertura.chiuso b{color:var(--grigio)}.giorno-apertura .riga-termine{align-items:center}.giorno-apertura .riga-termine>*{flex:none}.giorno-apertura .riga-termine b{flex:1}
+.fasce{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 8px;align-items:center;margin-top:8px}.fasce span{font-size:13px;color:var(--grigio)}.fasce span:nth-of-type(2){grid-column:1}
+@media (max-width:420px){.riga-voce{grid-template-columns:1fr}.riga-comandi{justify-content:flex-start}}
 .riscontro-alto{position:sticky;top:55px;z-index:6;box-shadow:0 2px 8px #0002}.barra{flex-wrap:wrap}#statoBarra{flex-basis:100%;font-size:13px;color:var(--blu);margin:0}input[type="checkbox"]{width:22px;height:22px;vertical-align:middle}.festa-stato{padding:12px;border-left:4px solid var(--oro);background:#fff6df;border-radius:8px;font-size:14px}
 </style>
 </head>
@@ -90,43 +102,17 @@
     <div data-scheda="menu">
       <section>
         <h2>Menu</h2>
-        <label for="notaMenu">Avviso generale per i clienti</label><textarea id="notaMenu" oninput="segna()"></textarea>
+        <input id="cercaProdotto" type="search" placeholder="Cerca un prodotto" oninput="filtraElenco()" aria-label="Cerca un prodotto">
+        <p class="piccolo">Prezzo, In vendita ed Esaurito si cambiano direttamente qui. Tocca il nome per foto, preparazioni e scheda del pesce.</p>
         <div id="categorie"></div>
       </section>
 
-      <section><h2>QR unico del menu</h2><p class="aiuto">Lo stesso QR apre sempre il menu aggiornato. Stampalo per il banco o condividilo. Nessun codice da cambiare ogni giorno.</p><a href="img/qr-menu.svg" target="_blank" rel="noopener">Apri il QR del menu</a><p><a href="index.html" target="_blank" rel="noopener">Apri il sito clienti</a></p></section>
       <section>
-        <h2>Aggiungi dal catalogo</h2>
-        <label for="catalogo">Specie</label>
-        <select id="catalogo"></select>
-        <button class="secondario" id="btnCatalogo" style="width:100%;margin-top:10px">Aggiungi specie</button>
-        <p class="piccolo" style="margin-top:8px">La specie viene aggiunta come "non in vendita": imposta il prezzo e spunta "In vendita".</p>
+        <h2>Avviso per i clienti</h2>
+        <label for="notaMenu">Compare in cima al menu (lascia vuoto per non mostrarlo)</label><textarea id="notaMenu" oninput="segna()" placeholder="Es. Sabato 8 chiuso per ferie"></textarea>
       </section>
 
-      <section>
-        <h2>Aggiungi una voce</h2>
-        <label for="nuovaCat">Categoria</label>
-        <select id="nuovaCat"></select>
-        <label for="nuovoNome">Nome</label>
-        <input id="nuovoNome" type="text" placeholder="Es. Polpo fresco">
-        <label for="nuovaDesc">Descrizione (facoltativa)</label>
-        <input id="nuovaDesc" type="text" placeholder="Es. Pesce del giorno">
-        <div class="campi" style="grid-template-columns:1fr 1fr">
-          <div>
-            <label for="nuovoPrezzo">Prezzo (€)</label>
-            <input id="nuovoPrezzo" type="number" inputmode="decimal" step="0.01" min="0">
-          </div>
-          <div>
-            <label for="nuovaUnita">Vendita</label>
-            <select id="nuovaUnita">
-              <option value="">a porzione</option>
-              <option value="kg">al kg</option>
-              <option value="etto">all'etto</option>
-            </select>
-          </div>
-        </div>
-        <button class="secondario" id="btnAggiungi" style="width:100%;margin-top:10px">Aggiungi al menu</button>
-      </section>
+      <section><h2>QR unico del menu</h2><p class="aiuto">Lo stesso QR apre sempre il menu aggiornato. Stampalo per il banco o condividilo. Nessun codice da cambiare ogni giorno.</p><a href="img/qr-menu.svg" target="_blank" rel="noopener">Apri il QR del menu</a><p><a href="index.html" target="_blank" rel="noopener">Apri il sito clienti</a></p></section>
     </div>
 
     <!-- SCHEDA PESCE DEL GIORNO -->
@@ -144,6 +130,12 @@
       </section>
 
       <section>
+        <h2>Orari di apertura del negozio</h2>
+        <p class="aiuto">Compaiono in fondo al menu clienti. Non cambiano gli orari di ritiro degli ordini.</p>
+        <div id="aperturaOpzioni"></div>
+      </section>
+
+      <section>
         <h2>Pesce di oggi</h2>
         <label for="evidenza">Voce in evidenza in cima alla pagina</label>
         <select id="evidenza"></select>
@@ -152,8 +144,8 @@
 
       <section>
         <h2>Aggiungi pesce al menu</h2>
-        <p class="aiuto">Nuove specie e nuovi prodotti si aggiungono nella scheda Menu.</p>
-        <button class="principale" onclick="mostraScheda('menu'); document.getElementById('catalogo').scrollIntoView({ behavior: 'smooth' });">Vai ad aggiungi pesce</button>
+        <p class="aiuto">Nuove specie e nuovi prodotti si aggiungono nella scheda Menu con + Aggiungi.</p>
+        <button class="principale" onclick="mostraScheda('menu')">Vai al menu</button>
       </section>
     </div>
 
@@ -172,6 +164,12 @@
   <div class="stato" id="stato"></div>
 </main>
 
+<div class="modale" id="schedaVoce" onclick="if (event.target.id === 'schedaVoce') chiudiVoce()">
+  <div class="foglio" id="schedaVoceCorpo"></div>
+</div>
+<div class="modale" id="nuovoProdotto" onclick="if (event.target.id === 'nuovoProdotto') chiudiNuovo()">
+  <div class="foglio" id="nuovoCorpo"></div>
+</div>
 <div class="modale" id="anteprima" onclick="if (event.target.id === 'anteprima') chiudiAnteprima()">
   <div class="foglio" id="anteprimaCorpo"></div>
 </div>
@@ -345,9 +343,7 @@ function mostraEditor() {
   if(natale)natale.c.attiva ??= Boolean(natale.c.periodo?.dal&&natale.c.periodo?.al);
   $("natale").innerHTML = natale ? festivitaHtml(natale.c, natale.ci) : "<p class='aiuto'>Sezione festività non trovata nel menu.</p>";
 
-  // categorie per nuova voce e catalogo
-  $("nuovaCat").innerHTML = dati.categorie.map((c, ci) => `<option value="${ci}">${esc(c.nome)}</option>`).join("");
-  $("catalogo").innerHTML = CATALOGO.map((s, i) => `<option value="${i}">${esc(s.nome)} (${esc(s.scientifico)})</option>`).join("");
+  filtraElenco();
 }
 
 function statoFestivita(c){
@@ -373,11 +369,11 @@ function festivitaHtml(c,ci){
  <p class="piccolo">Se non imposti una scadenza precisa, valgono i termini ordinari del menu. Le date e gli orari usano l'ora italiana. Nessuna prenotazione o piatto viene pubblicato automaticamente.</p>
  <button type="button" onclick="aggiungiFestivo(${ci})">Aggiungi piatto per questa festa</button>
  <p class="piccolo">Il nuovo piatto parte non in vendita: imposta nome, prezzo, porzione e disponibilità, poi salva.</p>
- ${c.voci.map((v,vi)=>voceHtml(ci,vi,v)).join('')}`;
+ ${c.voci.map((v,vi)=>rigaVoce(ci,vi,v)).join('')}`;
 }
 function aggiornaFesta(ci,k,value){dati.categorie[ci][k]=typeof value==='string'?value.trim():value;segna();}
 function scegliFesta(ci,value){leggiTestate();aggiornaFesta(ci,'ricorrenza',value);dati.categorie[ci].nome=value==='Altra ricorrenza'?'Menu della festa':'Menu di '+value;mostraEditor();}
-function aggiungiFestivo(ci){leggiTestate();dati.categorie[ci].voci.push({id:slugNome('festa'),nome:'Nuovo piatto della festa',descrizione:'',prezzo:0,unita:'porzioni',disponibile:false,stato:'disponibile'});segna();mostraEditor();}
+function aggiungiFestivo(ci){leggiTestate();dati.categorie[ci].voci.push({id:slugNome('festa'),nome:'Nuovo piatto della festa',descrizione:'',prezzo:0,unita:'porzioni',disponibile:false,stato:'disponibile'});segna();mostraEditor();apriVoce(ci,dati.categorie[ci].voci.length-1);}
 function validaFestivita(){
  for(const c of dati.categorie.filter(c=>c.id==='natale'&&c.attiva===true)){
   const valid=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')&&!Number.isNaN(Date.parse(d+'T12:00:00Z'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
@@ -397,10 +393,10 @@ function bloccoCategoria(c, forzaCi) {
       <div><label>Ordini entro</label><input type="text" value="${esc(c.ordini_entro || "")}" onchange="aggiornaCampoCat(${ci},'ordini_entro',this.value)"></div>
     </div>` : "";
   return `
-    ${c.id !== "natale" ? `<h3>${esc(c.nome)}</h3>` : ""}
+    ${c.id !== "natale" ? `<div class="cat-testa"><h3>${esc(c.nome)}</h3><button type="button" class="secondario" onclick="apriNuovo(${ci})">+ Aggiungi</button></div>` : ""}
     ${periodo}
-    ${c.voci.map((v, vi) => voceHtml(ci, vi, v)).join("")}
-    ${c.voci.length === 0 ? `<p class="piccolo">Nessuna proposta ancora: aggiungile da "Aggiungi una voce".</p>` : ""}`;
+    ${c.voci.map((v, vi) => rigaVoce(ci, vi, v)).join("")}
+    ${c.voci.length === 0 ? `<p class="piccolo">Nessun prodotto: tocca + Aggiungi.</p>` : ""}`;
 }
 
 function campoLista(ci, vi, k, etichetta, v, listaId) {
@@ -462,7 +458,9 @@ function mancanti(ci,v){
 function esitoScheda(ci,v){const m=mancanti(ci,v);return m.length?`<p class="esito-scheda manca">Da completare: ${esc(m.join(", "))}</p>`:`<p class="esito-scheda ok">Scheda completa</p>`;}
 
 function ridisegnaVoce(ci,vi){
- const el=document.getElementById(`voce-${ci}-${vi}`);if(!el){mostraEditor();return;}
+ ridisegnaRiga(ci,vi);
+ const el=document.getElementById(`voce-${ci}-${vi}`);if(!el)return;
+ const titolo=document.querySelector("#schedaVoceCorpo .testa-foglio h3");if(titolo)titolo.textContent=dati.categorie[ci].voci[vi].nome||"Prodotto";
  const aperti=[...el.querySelectorAll("details")].map(d=>d.open);
  el.outerHTML=voceHtml(ci,vi,dati.categorie[ci].voci[vi]);
  const nuovo=document.getElementById(`voce-${ci}-${vi}`);
@@ -591,7 +589,7 @@ function ritiroHtml(){
  <label class="check"><input type="checkbox" ${r.attivo===false?"":"checked"} onchange="dati.ritiro.attivo=this.checked;segna()"> Ordini online attivi</label>
  <p class="piccolo">Togli la spunta per sospendere temporaneamente gli ordini (per esempio per ferie).</p>`;
 }
-function ridisegnaRitiro(){$("ritiroOpzioni").innerHTML=ritiroHtml();}
+function ridisegnaRitiro(){$("ritiroOpzioni").innerHTML=ritiroHtml();$("aperturaOpzioni").innerHTML=aperturaHtml();}
 function aggiornaTermineGenerale(){dati.ritiro ||= {};dati.ritiro.ordini_entro=$("termineOra").value+" del giorno "+$("termineGiorno").value;segna();}
 function alternaOrario(chiave,o){
  dati.ritiro ||= {};
@@ -603,6 +601,100 @@ function alternaOrario(chiave,o){
 function aggiungiChiusura(){const d=$("nuovaChiusura").value;if(!d)return;dati.ritiro ||= {};const s=new Set(dati.ritiro.chiusure||[]);s.add(d);dati.ritiro.chiusure=[...s].sort();segna();ridisegnaRitiro();}
 function togliChiusura(d){dati.ritiro.chiusure=(dati.ritiro.chiusure||[]).filter(x=>x!==d);segna();ridisegnaRitiro();}
 
+
+// ---- ELENCO COMPATTO DEI PRODOTTI ----
+// Ogni prodotto è una riga: prezzo, In vendita ed Esaurito si cambiano subito; il resto si apre in un foglio.
+function rigaVoce(ci,vi,v){
+ const m=mancanti(ci,v);
+ const stato=v.stato==="terminato"?"Nascosto":v.stato==="esaurito"?"Esaurito":!v.disponibile?"Non in vendita":"";
+ const unita=v.unita==="kg"?"€/kg":v.unita==="etto"?"€/etto":"€";
+ return `<div class="riga-voce${v.disponibile&&v.stato!=="terminato"?"":" spenta"}" id="riga-${ci}-${vi}" data-nome="${esc(String(v.nome||"").toLowerCase())}">
+  <button type="button" class="riga-apri" onclick="apriVoce(${ci},${vi})">
+   ${v.foto?`<img class="pollice" src="${esc(v.foto)}" alt="">`:`<span class="pollice vuoto">Foto</span>`}
+   <span class="riga-testo"><b>${esc(v.nome||"Senza nome")}</b><span class="riga-badge">${stato?`<span class="badge grigio">${stato}</span>`:""}${m.length?`<span class="badge giallo">Da completare</span>`:""}<span class="badge link">Modifica</span></span></span>
+  </button>
+  <div class="riga-comandi">
+   <label class="riga-prezzo"><input type="number" step="0.01" min="0" inputmode="decimal" aria-label="Prezzo di ${esc(v.nome)}" value="${v.prezzo ?? ""}" onchange="aggiornaPrezzo(${ci},${vi},this.value)"><small>${unita}</small></label>
+   <label class="interruttore"><input type="checkbox" ${v.disponibile?"checked":""} onchange="aggiornaDisponibile(${ci},${vi},this.checked);ridisegnaRiga(${ci},${vi})"><span>In vendita</span></label>
+   <button type="button" class="scelta mini" aria-pressed="${v.stato==="esaurito"}" onclick="impostaStato(${ci},${vi},'${v.stato==="esaurito"?"Disponibile":"Esaurito"}')">Esaurito</button>
+  </div>
+ </div>`;
+}
+function ridisegnaRiga(ci,vi){const el=document.getElementById(`riga-${ci}-${vi}`);if(el)el.outerHTML=rigaVoce(ci,vi,dati.categorie[ci].voci[vi]);filtraElenco();}
+function apriVoce(ci,vi){
+ const v=dati.categorie[ci].voci[vi];
+ $("schedaVoceCorpo").innerHTML=`<div class="testa-foglio"><h3>${esc(v.nome||"Prodotto")}</h3><button type="button" class="principale" onclick="chiudiVoce()">Fatto</button></div>${voceHtml(ci,vi,v)}`;
+ $("schedaVoceCorpo").dataset.voce=ci+":"+vi;
+ $("schedaVoce").classList.add("aperta");
+}
+function chiudiVoce(){
+ const [ci,vi]=String($("schedaVoceCorpo").dataset.voce||"").split(":").map(Number);
+ $("schedaVoce").classList.remove("aperta");$("schedaVoceCorpo").innerHTML="";$("schedaVoceCorpo").dataset.voce="";
+ if(Number.isInteger(ci)&&dati.categorie[ci]?.voci[vi])ridisegnaRiga(ci,vi);
+}
+function filtraElenco(){
+ const q=String($("cercaProdotto")?.value||"").trim().toLowerCase();
+ document.querySelectorAll(".riga-voce").forEach(r=>{r.hidden=Boolean(q)&&!r.dataset.nome.includes(q);});
+}
+
+// ---- AGGIUNGI PRODOTTO (un solo foglio: catalogo o nome libero) ----
+let nuovoCi=null,nuovaSpecie=null,nuovaUnita="kg";
+function apriNuovo(ci){
+ nuovoCi=ci;nuovaSpecie=null;
+ const festa=dati.categorie[ci].id==="natale",pesce=dati.categorie[ci].id==="pesce-fresco";
+ nuovaUnita=pesce?"kg":"";
+ $("nuovoCorpo").innerHTML=`<div class="testa-foglio"><h3>Aggiungi a ${esc(dati.categorie[ci].nome)}</h3><button type="button" class="secondario" onclick="chiudiNuovo()">Annulla</button></div>
+  ${festa?"":`<label for="cercaSpecie">Cerca la specie</label><input id="cercaSpecie" type="search" placeholder="Es. orata, gambero, vongola" oninput="disegnaSpecie()"><div class="scelte" id="specieChip"></div><p class="piccolo">Scegliendo una specie si compilano nome scientifico e allergene.</p>`}
+  <label for="nuovoNomeLibero">Nome che vede il cliente</label><input id="nuovoNomeLibero" type="text" placeholder="${festa?"Es. Baccalà fritto":"Es. Polpo verace"}">
+  <label for="nuovoPrezzoLibero">Prezzo €</label><input id="nuovoPrezzoLibero" type="number" step="0.01" min="0" inputmode="decimal">
+  <label>Si vende</label><div class="scelte" id="unitaChip"></div>
+  <button type="button" class="principale" style="margin-top:14px" onclick="creaProdotto()">Aggiungi e completa la scheda</button>
+  <p class="piccolo">Il prodotto parte "non in vendita": lo attivi quando prezzo e scheda sono pronti.</p>`;
+ disegnaSpecie();disegnaUnita();
+ $("nuovoProdotto").classList.add("aperta");
+ setTimeout(()=>($("cercaSpecie")||$("nuovoNomeLibero")).focus(),50);
+}
+function chiudiNuovo(){$("nuovoProdotto").classList.remove("aperta");}
+function disegnaSpecie(){
+ const box=$("specieChip");if(!box)return;
+ const q=String($("cercaSpecie").value||"").trim().toLowerCase();
+ const lista=CATALOGO.map((s,i)=>({s,i})).filter(({s})=>!q||s.nome.toLowerCase().includes(q)||s.scientifico.toLowerCase().includes(q)).slice(0,q?20:12);
+ box.innerHTML=lista.map(({s,i})=>`<button type="button" class="scelta" aria-pressed="${i===nuovaSpecie}" onclick="scegliNuovaSpecie(${i})">${esc(s.nome)}</button>`).join("")||'<p class="piccolo">Nessuna specie trovata: scrivi il nome qui sotto.</p>';
+}
+function scegliNuovaSpecie(i){nuovaSpecie=nuovaSpecie===i?null:i;if(nuovaSpecie!==null){$("nuovoNomeLibero").value=CATALOGO[i].nome;nuovaUnita="kg";disegnaUnita();}disegnaSpecie();}
+function disegnaUnita(){$("unitaChip").innerHTML=[["","a porzione"],["kg","al kg"],["etto","all'etto"]].map(([u,t])=>`<button type="button" class="scelta" aria-pressed="${u===nuovaUnita}" onclick="nuovaUnita='${u}';disegnaUnita()">${t}</button>`).join("");}
+function creaProdotto(){
+ const nome=$("nuovoNomeLibero").value.trim();
+ if(!nome){messaggio("Scrivi il nome del prodotto.","err");return;}
+ const c=dati.categorie[nuovoCi],s=nuovaSpecie!==null?CATALOGO[nuovaSpecie]:null;
+ leggiTestate();
+ const voce={id:slugNome(nome),nome,descrizione:"",prezzo:Number($("nuovoPrezzoLibero").value)||0,unita:nuovaUnita||(c.id==="natale"?"porzioni":null),disponibile:false,stato:"disponibile"};
+ if(s)Object.assign(voce,{nome_scientifico:s.scientifico,allergeni:s.gruppo,zona_fao:"",metodo:"",attrezzo:""});
+ c.voci.push(voce);
+ segna();chiudiNuovo();mostraEditor();
+ apriVoce(nuovoCi,c.voci.length-1);
+ messaggio(`"${nome}" aggiunto. Completa la scheda, metti In vendita e premi Salva.`,"info");
+}
+
+// ---- ORARI DI APERTURA DEL NEGOZIO ----
+const GIORNI_SETTIMANA=["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"];
+const ORE_APERTURA=Array.from({length:35},(_,i)=>{const m=5*60+i*30;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");}); // 05:00 - 22:00
+function orariApertura(){
+ if(!Array.isArray(dati.orari_apertura)||dati.orari_apertura.length!==7)dati.orari_apertura=GIORNI_SETTIMANA.map((g,i)=>({giorno:g,chiuso:i===0,fasce:[["",""],["",""]]}));
+ return dati.orari_apertura;
+}
+function selOra(i,f,k,val){return `<select aria-label="${GIORNI_SETTIMANA[i]} fascia ${f+1} ${k?"fine":"inizio"}" onchange="aggiornaApertura(${i},${f},${k},this.value)"><option value="">--</option>${ORE_APERTURA.map(o=>`<option ${o===val?"selected":""}>${o}</option>`).join("")}</select>`;}
+function aperturaHtml(){
+ const lista=Array.isArray(dati.orari_apertura)&&dati.orari_apertura.length===7?dati.orari_apertura:null;
+ if(!lista)return `<p class="piccolo">Gli orari di apertura non sono ancora impostati: i clienti non li vedono.</p><button type="button" class="secondario" onclick="orariApertura();segna();ridisegnaRitiro()">Imposta gli orari di apertura</button>`;
+ return lista.map((d,i)=>`<div class="giorno-apertura${d.chiuso?" chiuso":""}"><div class="riga-termine"><b>${d.giorno}</b><label class="interruttore"><input type="checkbox" ${d.chiuso?"":"checked"} onchange="aggiornaChiuso(${i},!this.checked)"><span>${d.chiuso?"Chiuso":"Aperto"}</span></label></div>
+  ${d.chiuso?"":`<div class="fasce"><span>Mattina</span>${selOra(i,0,0,d.fasce?.[0]?.[0])}${selOra(i,0,1,d.fasce?.[0]?.[1])}<span>Pomeriggio</span>${selOra(i,1,0,d.fasce?.[1]?.[0])}${selOra(i,1,1,d.fasce?.[1]?.[1])}</div>`}</div>`).join("")
+ +`<button type="button" class="secondario" style="margin-top:8px" onclick="copiaApertura()">Copia gli orari del primo giorno aperto su tutti gli altri giorni aperti</button>
+ <p class="piccolo">Lascia "--" per la fascia che non c'è (es. aperto solo la mattina).</p>`;
+}
+function aggiornaChiuso(i,chiuso){orariApertura()[i].chiuso=chiuso;segna();ridisegnaRitiro();}
+function aggiornaApertura(i,f,k,val){const d=orariApertura()[i];d.fasce ||= [["",""],["",""]];d.fasce[f] ||= ["",""];d.fasce[f][k]=val;segna();}
+function copiaApertura(){const lista=orariApertura(),primo=lista.find(d=>!d.chiuso);if(!primo)return;for(const d of lista)if(!d.chiuso)d.fasce=JSON.parse(JSON.stringify(primo.fasce||[]));segna();ridisegnaRitiro();messaggio("Orari copiati sui giorni aperti. Ricordati di salvare.","info");}
 
 // Archivio pubblico dei soli dati di provenienza: nessuna fattura o dato personale.
 const CAMPI_ARRIVO=['nome','lotto_fornitore','nome_scientifico','paese_origine','zona_fao','metodo','provenienza','data_pesca','data_arrivo','ora_arrivo','attrezzo','stato_prodotto','condizione','data_congelamento','glassatura','allergeni'];
@@ -650,6 +742,7 @@ function eliminaVoce(ci, vi) {
   leggiTestate();
   dati.categorie[ci].voci.splice(vi, 1);
   segna();
+  if (typeof chiudiVoce === "function" && $("schedaVoce")) { $("schedaVoceCorpo").dataset.voce = ""; chiudiVoce(); }
   mostraEditor();
 }
 
@@ -808,8 +901,6 @@ $("btnRicarica").addEventListener("click", () => {
   if (sporco && !confirm("Ci sono modifiche non salvate. Ricaricare comunque?")) return;
   carica();
 });
-$("btnAggiungi").addEventListener("click", aggiungiVoce);
-$("btnCatalogo").addEventListener("click", aggiungiDaCatalogo);
 window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault(); e.returnValue = ""; } });
 
 // ---- AVVIO ----

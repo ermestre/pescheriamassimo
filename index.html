@@ -165,6 +165,10 @@
 .conferma .spunta { width: 64px; height: 64px; margin: 0 auto 6px; border-radius: 50%; background: #2f7d55; color: #fff; font-size: 36px; line-height: 64px; }
 .conferma .codice b { display: inline-block; margin-left: 6px; padding: 4px 12px; border-radius: 8px; background: var(--seppia); font: 700 24px var(--serif); letter-spacing: .08em; }
 .arrivare.secondario { background: #fff; color: #1e8a4c; border: 1.5px solid #1e8a4c; margin-left: 6px; }
+.orari-negozio { max-width: 320px; margin: 18px auto 0; text-align: left; }
+.orari-negozio b { display: block; text-align: center; font: 700 17px var(--serif); color: var(--blu); margin-bottom: 6px; }
+.orari-negozio div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed var(--bordo); }
+.orari-negozio div span:first-child { font-weight: 600; color: var(--blu); }
 .nota-ritiro{margin:8px 0 0;padding:10px 12px;border-radius:8px;background:#fff4d9;color:#5c3d00;font-size:14px;font-weight:600}
 #invioStato.esito-errore{background:#fdecea;color:#8a1c12;border:2px solid #b3261e;border-radius:10px;padding:12px 14px;font-weight:700;font-size:16px}
 #invioStato.esito-ok{background:#e6f4ea;color:#1d5c32;border:2px solid #2f7d55;border-radius:10px;padding:12px 14px;font-weight:700;font-size:16px}
@@ -639,6 +643,17 @@ function confermaCarta(id){if(!carrello[id])aggiungiDaCarta(id);else chiudiCarta
 function chiudiCarta() { cartaApertaId=null;document.getElementById("carta").classList.remove("aperta"); }
 function aggiungiDaCarta(id) { cambia(id, 1); chiudiCarta(); }
 
+// Orari di apertura del negozio: giorni consecutivi con gli stessi orari in una sola riga.
+function orariAperturaHtml(lista){
+  if(!Array.isArray(lista)||lista.length!==7)return "";
+  const brevi=["Lun","Mar","Mer","Gio","Ven","Sab","Dom"],ora=o=>String(o).replace(/^0/,"");
+  const testo=d=>{if(d.chiuso)return "chiuso";const f=(d.fasce||[]).filter(x=>x&&x[0]&&x[1]&&x[0]<x[1]).map(x=>ora(x[0])+"–"+ora(x[1]));return f.length?f.join(", "):"";};
+  const gruppi=[];
+  lista.forEach((d,i)=>{const t=testo(d);if(!t)return;const g=gruppi.at(-1);if(g&&g.t===t&&g.fine===i-1)g.fine=i;else gruppi.push({inizio:i,fine:i,t});});
+  if(!gruppi.length)return "";
+  return `<div class="orari-negozio"><b>Orari del negozio</b>${gruppi.map(g=>`<div><span>${brevi[g.inizio]}${g.fine>g.inizio?"–"+brevi[g.fine]:""}</span><span>${escapa(g.t)}</span></div>`).join("")}</div>`;
+}
+
 // ---- AVVIO ----
 // Chiude eventuali riquadri rimasti aperti (scheda pesce, riepilogo): evita il velo blu
 document.querySelectorAll(".modale").forEach(m => m.classList.remove("aperta"));
@@ -653,7 +668,7 @@ fetch("menu.json", { cache: "no-store" })
       <a class="arrivare" target="_blank" rel="noopener"
          href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent("Pescheria da Massimo, " + menu.indirizzo)}&travelmode=driving">Come arrivare</a>
       <a class="arrivare secondario" target="_blank" rel="noopener" href="https://wa.me/${encodeURIComponent(NUMERO_WHATSAPP)}">Scrivici su WhatsApp</a>
-      <br><small>Chiuso il lunedì</small>`;
+      ${orariAperturaHtml(menu.orari_apertura)||"<br><small>Chiuso il lunedì</small>"}`;
     aggiornaOrari();
     if (menu.ritiro && menu.ritiro.ordini_entro) document.getElementById("entro").textContent = menu.ritiro.ordini_entro;
     render();

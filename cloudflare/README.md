@@ -182,3 +182,12 @@ Menu clienti (index.html): pulsante Aggiungi, peso e preparazione solo dopo l'ag
 Worker: ritiro.orari dal menu (se valido, altrimenti gli orari predefiniti), codice corto accanto al nome nel pannello e nel messaggio di conferma WhatsApp. Distribuire il Worker prima di cambiare gli orari standard dalla gestione.
 
 Verifica: tutte le suite passano; tests/ritiro.test.mjs controlla anche gli orari configurati. Prova in Chromium a 390 px: aggiunta prodotti, carrello, scelta giorno e ora, invio con conferma, gestione con scelte a pulsanti.
+
+## Gestione del menu semplificata e orari di apertura (2 novembre 2026)
+
+- Menu come elenco compatto: per ogni prodotto foto, nome, avvisi (Non in vendita, Esaurito, Da completare), prezzo modificabile, interruttore In vendita e pulsante Esaurito. Toccando il nome si apre un foglio con tutti i dettagli (foto, preparazioni e ritiro, scheda del pesce, consiglio); "Fatto" lo chiude.
+- Ricerca per nome in cima all'elenco.
+- Un solo modo per aggiungere: "+ Aggiungi" accanto a ogni categoria apre un foglio con ricerca nel catalogo delle specie (nome scientifico e allergene automatici) oppure nome libero, prezzo e unità a pulsanti. Il prodotto parte non in vendita e si apre subito la sua scheda.
+- Orari di apertura del negozio (menu.orari_apertura, sette giorni con chiuso e due fasce) nella scheda Ritiro e ordini, con "copia su tutti i giorni aperti". Il menu clienti li mostra in fondo raggruppando i giorni uguali; senza orari resta "Chiuso il lunedì". Non modificano gli orari di ritiro.
+
+Verifica: node tests/gestione.test.cjs; prova in Chromium a 390 px. Nessuna modifica al Worker.
