@@ -372,7 +372,7 @@
           "stato": "disponibile"
         }
       ],
-      "attiva": true,
+      "attiva": false,
       "ricorrenza": "Natale",
       "presentazione": "Per questa festivita MAssimo propone: volgole veraci , baccala' e orata",
       "ritiro_data": "2026-11-02"
