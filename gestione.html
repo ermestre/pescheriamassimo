@@ -371,7 +371,8 @@ function festivitaHtml(c,ci){
  <p class="piccolo">Se non imposti una scadenza precisa, valgono i termini ordinari del menu. Le date e gli orari usano l'ora italiana. Nessuna prenotazione o piatto viene pubblicato automaticamente.</p>
  <button type="button" onclick="aggiungiFestivo(${ci})">Aggiungi piatto per questa festa</button>
  <p class="piccolo">Il nuovo piatto parte non in vendita: imposta nome, prezzo, porzione e disponibilità, poi salva.</p>
- ${c.voci.map((v,vi)=>rigaVoce(ci,vi,v)).join('')}`;
+ ${c.voci.map((v,vi)=>rigaVoce(ci,vi,v)).join('')}
+ <button type="button" class="principale" style="margin-top:14px" onclick="aggiungiFestivo(${ci})">+ Aggiungi un altro piatto</button>`;
 }
 function aggiornaFesta(ci,k,value){dati.categorie[ci][k]=typeof value==='string'?value.trim():value;segna();}
 function scegliFesta(ci,value){leggiTestate();aggiornaFesta(ci,'ricorrenza',value);dati.categorie[ci].nome=value==='Altra ricorrenza'?'Menu della festa':'Menu di '+value;mostraEditor();}
