@@ -120,3 +120,20 @@ Il Worker aggiunge la data di ritiro esplicitamente configurata anche oltre la f
 Distribuzione: menu e gestione si aggiornano con GitHub Pages. Sostituire e distribuire l'intero cloudflare/worker.js su Cloudflare prima di attivare le prenotazioni festive. Il client abilita i prodotti festivi solo quando il servizio dichiara festivities_supported:true; con Worker precedente mostra Prenotazioni della festività in preparazione. Non serve SQL aggiuntivo. Le altre funzioni del pannello sono incluse nel file completo.
 
 Verifica: tests/festivities.test.mjs copre ritiro oltre 14 giorni, rifiuto data sbagliata e prodotti ordinari sulla data speciale, scadenza italiana al minuto, bozza, lunedì esplicito e chiusure; tests/menu.test.cjs copre editor, date, testi e bozze. Suite Worker, accesso e avvisi passate. Nessun ordine reale inserito dai test; verifica visiva nel browser ancora da fare.
+
+
+## Disponibilità, prenotazioni e banco (2 novembre 2026)
+
+Il pannello ordini ha Disponibilità e vendite al banco. Aggiorna disponibilità elenca i prodotti del menu. Senza carico il prodotto è senza limite; Aggiungi arrivo disponibile attiva la gestione e incrementa il residuo. Inserire solo quantità libere, al netto degli ordini già presenti. Scala vendita al banco decrementa la quantità libera: non va usato per consegnare un ordine online, già scalato al momento della prenotazione.
+
+Quantità in millesimi (grammi per kg; pezzi/porzioni interi per altre unità), senza errori di virgola mobile nei saldi. Carichi e vendite usano UUID idempotenti e un batch D1 atomico. I trigger prenotano insieme all'inserimento dell'ordine: se un solo prodotto non basta, l'intero ordine non viene inserito. Ritentare un ordine con lo stesso codice non scala due volte. Il server è autorevole anche se il cliente ha una pagina con disponibilità vecchie.
+
+Annullato libera le prenotazioni; ripetere l'annullamento non aggiunge quantità. Riattivare un annullato richiede nuovamente disponibilità sufficiente. Ritirato mantiene la quantità scalata. Le prenotazioni degli ordini raccolti prima dell'attivazione della gestione per quel prodotto non vengono ricostruite né restituite con date/quantità inventate. Non cancellare direttamente ordini o prodotti con SQL.
+
+Le quantità sono per prodotto e condivise tra tutti i giorni di ritiro, non per lotto o giornata. Il menu clienti mostra il residuo dell'ultima lettura della configurazione; il controllo definitivo avviene nell'invio. Gli ordini nuovi non ancora confermati impegnano subito la quantità. Gli importi effettivi dell'incasso non correggono automaticamente eventuali differenze di peso al banco. La schermata stock si aggiorna con il suo pulsante. Non è introdotta una scadenza automatica delle prenotazioni.
+
+Distribuire l'intero Worker aggiornato: crea automaticamente inventory, stock_moves e stock_reservations e i trigger alla prima richiesta. Nessun SQL manuale. Il menu clienti si pubblica su GitHub Pages; prima del deploy Worker le quantità restano senza limite, come in precedenza. Non sono state assegnate quantità reali né modificati ordini/menu.json in produzione.
+
+Verifica: node tests/stock.test.mjs con SQLite reale in memoria (carichi, banco e invii ripetuti, rifiuto senza ordini parziali, annullamento/riattivazione, ritirato, ordini storici e disponibilità pubblica); suite Worker, menu, accesso e avvisi passate. Nessuna verifica sul D1 di produzione: fare una prova dopo distribuzione con un prodotto test.
+
+Riferimenti Cloudflare verificati il 2 novembre 2026: https://developers.cloudflare.com/d1/sql-api/sql-statements/ e https://developers.cloudflare.com/d1/worker-api/d1-database/ (SQL SQLite e batch atomici).
