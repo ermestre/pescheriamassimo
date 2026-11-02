@@ -169,6 +169,8 @@
 .orari-negozio b { display: block; text-align: center; font: 700 17px var(--serif); color: var(--blu); margin-bottom: 6px; }
 .orari-negozio div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed var(--bordo); }
 .orari-negozio div span:first-child { font-weight: 600; color: var(--blu); }
+.prep-unica { margin: 6px 0; font-size: 14px; color: var(--grigio); }
+.prep-unica b { color: var(--blu); }
 .nota-ritiro{margin:8px 0 0;padding:10px 12px;border-radius:8px;background:#fff4d9;color:#5c3d00;font-size:14px;font-weight:600}
 #invioStato.esito-errore{background:#fdecea;color:#8a1c12;border:2px solid #b3261e;border-radius:10px;padding:12px 14px;font-weight:700;font-size:16px}
 #invioStato.esito-ok{background:#e6f4ea;color:#1d5c32;border:2px solid #2f7d55;border-radius:10px;padding:12px 14px;font-weight:700;font-size:16px}
@@ -380,7 +382,7 @@ function scelteVoce(v,q){
  ${v.foto_didascalia?`<small>${escapa(v.foto_didascalia)}</small>`:""}
  ${v.unita==="kg"?`<div class="pesi" aria-label="Scegli peso">${[.5,1,1.5].map(n=>`<button onclick="scegliPeso('${v.id}',${n})" ${off?"disabled":""} aria-pressed="${q===n}">${quantita(v,n)}</button>`).join("")}</div>`:""}
  ${q>0?`<div><b>${quantita(v,q)} · ${fmt(Math.round(Math.round(v.prezzo*100)*q)/100)}</b></div>`:""}
- ${opzioni.length?`<label>Preparazione <select ${off?"disabled":""} onchange="scegliPreparazione('${v.id}',this.value)">${opzioni.map(x=>`<option ${x===prep?"selected":""}>${escapa(x)}</option>`).join("")}</select></label><small>Peso e totale indicativi; peso finale e importo da confermare al banco.</small>`:""}
+ ${opzioni.length>1?`<label>Preparazione <select ${off?"disabled":""} onchange="scegliPreparazione('${v.id}',this.value)">${opzioni.map(x=>`<option ${x===prep?"selected":""}>${escapa(x)}</option>`).join("")}</select></label>`:opzioni.length===1?`<p class="prep-unica">Preparazione: <b>${escapa(opzioni[0])}</b></p>`:""}${opzioni.length||v.unita==="kg"||v.unita==="etto"?`<small>Peso e totale indicativi; peso finale e importo da confermare al banco.</small>`:""}
  ${v.consiglio?`<p class="consiglio"><b>Il consiglio di Massimo:</b> ${escapa(v.consiglio)}</p>`:""}
  </div>`;
 }

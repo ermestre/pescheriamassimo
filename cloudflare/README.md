@@ -191,3 +191,10 @@ Verifica: tutte le suite passano; tests/ritiro.test.mjs controlla anche gli orar
 - Orari di apertura del negozio (menu.orari_apertura, sette giorni con chiuso e due fasce) nella scheda Ritiro e ordini, con "copia su tutti i giorni aperti". Il menu clienti li mostra in fondo raggruppando i giorni uguali; senza orari resta "Chiuso il lunedì". Non modificano gli orari di ritiro.
 
 Verifica: node tests/gestione.test.cjs; prova in Chromium a 390 px. Nessuna modifica al Worker.
+
+## Preparazioni e prova completa (2 novembre 2026)
+
+- Menu clienti: con una sola preparazione compare la scritta "Preparazione: ..." al posto del menu a tendina.
+- Gestione: nella scheda del prodotto le preparazioni tipiche per tipo (pesce intero, pesce da tranci, crostacei, cefalopodi; nessuna per bivalvi, baccalà e prodotti pronti) con il pulsante "Attiva le suggerite". Non si attivano mai da sole.
+- Pannello: dopo "Conferma su WhatsApp" la scheda diventa subito Confermato e compare "Segna come pronto".
+- Prova completa in Chromium con worker.js e pagine reali in locale: ogni prodotto in vendita con ogni preparazione ordinato dal sito e ritrovato nel pannello con codice corto e preparazione; carrello misto con orari serali; dati ricordati; conferma WhatsApp, pronto, incasso, ritirato, resoconto, CSV, annulla ed elimina; prezzo ed Esaurito dalla gestione visti dal sito e accettati dal servizio; nuovo prodotto non in vendita invisibile. 69 controlli superati, nessun errore JavaScript.

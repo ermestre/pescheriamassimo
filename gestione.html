@@ -459,7 +459,7 @@ function esitoScheda(ci,v){const m=mancanti(ci,v);return m.length?`<p class="esi
 
 function ridisegnaVoce(ci,vi){
  ridisegnaRiga(ci,vi);
- const el=document.getElementById(`voce-${ci}-${vi}`);if(!el)return;
+ const el=document.getElementById(`voce-${ci}-${vi}`);if(!el?.querySelectorAll)return;
  const titolo=document.querySelector("#schedaVoceCorpo .testa-foglio h3");if(titolo)titolo.textContent=dati.categorie[ci].voci[vi].nome||"Prodotto";
  const aperti=[...el.querySelectorAll("details")].map(d=>d.open);
  el.outerHTML=voceHtml(ci,vi,dati.categorie[ci].voci[vi]);
@@ -525,6 +525,7 @@ function voceHtml(ci, vi, v) {
         <summary>Preparazioni e ritiro</summary>
         <p class="piccolo">Tocca le lavorazioni che Massimo offre per questo prodotto. Nessun supplemento viene aggiunto.</p>
         <div class="scelte">${PREPARAZIONI.map(x=>`<label class="scelta"><input type="checkbox" ${(v.preparazioni||[]).includes(x)?"checked":""} onchange="aggiornaPreparazioni(${ci},${vi},'${x}',this.checked);ridisegnaVoce(${ci},${vi})"> ${x}</label>`).join("")}</div>
+        ${suggerimentoPreparazioni(ci,vi,v)}
         <label class="check"><input type="checkbox" ${v.su_ordinazione?"checked":""} onchange="aggiornaSera(${ci},${vi},this.checked)"> Su ordinazione: ritiro solo negli orari serali</label>
         <label>Termine ordini solo per questo prodotto</label>
         ${selettoreTermine(`termine-ora-${ci}-${vi}`,`termine-giorno-${ci}-${vi}`,v.ordini_entro,`aggiornaTermineVoce(${ci},${vi})`,"Come il resto del menu")}
@@ -570,6 +571,24 @@ function voceHtml(ci, vi, v) {
       </div>
     </div>`;
 }
+// Preparazioni tipiche per tipo di prodotto: solo un suggerimento, si attivano a mano dopo conferma di Massimo.
+function preparazioniSuggerite(v){
+ const nome=String(v.nome||"").toLowerCase(),sci=String(v.nome_scientifico||"").toLowerCase(),gruppo=CATALOGO.find(s=>s.scientifico.toLowerCase()===sci)?.gruppo||(/crostacei/i.test(v.allergeni||"")?"Crostacei":/molluschi/i.test(v.allergeni||"")?"Molluschi":/pesce/i.test(v.allergeni||"")?"Pesce":"");
+ if(!sci&&!gruppo)return [];
+ if(/baccal|stocc|sgusciat/.test(nome))return [];
+ if(gruppo==="Crostacei")return ["Intero","Sgusciato"];
+ if(gruppo==="Molluschi")return /loligo|todarodes|sepia|octopus|eledone/.test(sci)||/calamar|totan|seppi|polp|moscard/.test(nome)?["Intero","Pulito"]:[];
+ if(/thunnus|xiphias|seriola|epinephelus/.test(sci)||/tonno|spada|ricciola|cernia|trancio/.test(nome))return ["A tranci"];
+ if(gruppo==="Pesce")return ["Intero","Pulito","Sfilettato"];
+ return [];
+}
+function suggerimentoPreparazioni(ci,vi,v){
+ const s=preparazioniSuggerite(v),attive=v.preparazioni||[];
+ if(!s.length)return `<p class="piccolo">Per questo prodotto non ci sono preparazioni tipiche da suggerire.</p>`;
+ if(s.every(x=>attive.includes(x)))return "";
+ return `<p class="piccolo">Di solito per questo tipo: <b>${esc(s.join(", "))}</b>. Attivale solo se Massimo le fa.</p><button type="button" class="secondario" onclick="attivaSuggerite(${ci},${vi})">Attiva le suggerite</button>`;
+}
+function attivaSuggerite(ci,vi){const v=dati.categorie[ci].voci[vi];const set=new Set([...(v.preparazioni||[]),...preparazioniSuggerite(v)]);v.preparazioni=PREPARAZIONI.filter(x=>set.has(x));segna();ridisegnaVoce(ci,vi);}
 function impostaStato(ci,vi,etichetta){dati.categorie[ci].voci[vi].stato=({Esaurito:"esaurito",Terminato:"terminato"})[etichetta]||"disponibile";segna();ridisegnaVoce(ci,vi);}
 
 // ---- RITIRO E ORDINI ----
