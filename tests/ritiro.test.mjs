@@ -78,4 +78,9 @@ c=client(new Date('2026-11-03T09:00:00Z'),menuFile);
 c.node('giorno').value='2026-11-03';c.run('cambia("orata",1)');
 assert.equal(c.node('giorno').value,'2026-11-04');
 assert.equal(c.node('notaRitiro').hidden,false);
+// Orari di ritiro scelti nella gestione: sito e servizio usano gli stessi.
+const conOrari=structuredClone(menuFile);conOrari.ritiro.orari=['08:00','12:30','19:30'];
+c=client(new Date('2026-11-03T09:00:00Z'),conOrari);
+assert.deepEqual([...c.run('orariPer([tutte().find(v=>v.id==="orata")],"2026-11-05")')],['08:00','12:30','19:30']);
+for(const t of HOURS.concat(['08:00','12:30']))assert.equal(['08:00','12:30','19:30'].includes(t),serverAccepts(conOrari,new Date('2026-11-03T09:00:00Z'),conOrari.categorie[1].voci.find(v=>v.id==='orata'),'2026-11-05',t),'orario '+t);
 console.log(`OK: giorni e orari del sito uguali a quelli accettati dal servizio (${checked} combinazioni), festa chiusa, carrello incompatibile bloccato, giorno aggiornato con avviso`);

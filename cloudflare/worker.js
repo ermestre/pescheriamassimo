@@ -1,6 +1,8 @@
 const CLIENT_ORIGIN = 'https://ermestre.github.io';
 const MENU_URL = 'https://raw.githubusercontent.com/ermestre/pescheriamassimo/main/menu.json';
 const HOURS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','17:00','17:30','18:00','18:30','19:00'];
+// Orari standard: quelli scelti nella gestione (ritiro.orari) oppure quelli predefiniti.
+function standardHours(menu){const list=menu?.ritiro?.orari;return Array.isArray(list)&&list.length&&list.every(h=>/^([01]\d|2[0-3]):[0-5]\d$/.test(h))?list:HOURS;}
 function fail(message,status=400){throw Object.assign(new Error(message),{status});}
 function rome(now=new Date()){
  const parts=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);
@@ -89,7 +91,7 @@ function priceOrder(order,menu,now=new Date()){
   total+=line_total_cents;
   return {...item,...(category.id==='natale'?{occasion:category.ricorrenza||category.nome}:{}),name:v.nome,unit:v.unita||'porzioni',unit_price_cents,line_total_cents};
  });
- const hours=evening?(menu.ritiro?.orari_sera||['18:30','19:00','19:30','20:00']):HOURS;
+ const hours=evening?(menu.ritiro?.orari_sera||['18:30','19:00','19:30','20:00']):standardHours(menu);
  if(!hours.includes(order.pickup_time))fail('Orario di ritiro non disponibile');
  if(total!==order.total_cents)fail('I prezzi sono cambiati. Aggiorna il menu e controlla il totale prima di inviare.',409);
  return {...order,items};
@@ -134,7 +136,7 @@ const STOCK_SQL=[
 ];
 // Schema: le istruzioni di creazione girano una sola volta per database, non a ogni richiesta.
 // Aumentare SCHEMA_VERSION quando si aggiungono tabelle, indici o trigger.
-const SCHEMA_VERSION=2;
+const SCHEMA_VERSION=3;
 function schemaSql(){return [
  'CREATE TABLE IF NOT EXISTS order_limits (key TEXT PRIMARY KEY, bucket INTEGER NOT NULL, count INTEGER NOT NULL)',
  ...STOCK_SQL,
@@ -147,7 +149,8 @@ function schemaSql(){return [
  "INSERT OR IGNORE INTO app_meta(key,value) VALUES('rev',0)",
  "CREATE TRIGGER IF NOT EXISTS rev_order_insert AFTER INSERT ON orders BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END",
  "CREATE TRIGGER IF NOT EXISTS rev_order_update AFTER UPDATE ON orders BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END",
- "CREATE TRIGGER IF NOT EXISTS rev_payment_insert AFTER INSERT ON payment_events BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END"
+ "CREATE TRIGGER IF NOT EXISTS rev_payment_insert AFTER INSERT ON payment_events BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END",
+ "CREATE TRIGGER IF NOT EXISTS rev_order_delete AFTER DELETE ON orders BEGIN UPDATE app_meta SET value=value+1 WHERE key='rev'; END"
 ];}
 async function ensureSchema(db){
  try{const row=await db.prepare("SELECT value FROM app_meta WHERE key='schema'").first();if(row&&row.value>=SCHEMA_VERSION)return;}catch(e){}
@@ -305,6 +308,21 @@ export default {
     return json({orders:result.results.map(row=>({...row,items:JSON.parse(row.items_json),items_json:undefined}))});
    }
    const match=url.pathname.match(/^\/api\/orders\/([a-zA-Z0-9-]{1,80})$/);
+   // Eliminazione definitiva: solo ordini già annullati, insieme ai loro movimenti e prenotazioni.
+   if(match && request.method==="DELETE"){
+    const id=match[1];
+    const order=await env.db.prepare("SELECT status FROM orders WHERE id=?").bind(id).first();
+    if(!order)return json({errore:"Ordine non trovato. Premi Aggiorna."},404);
+    if(order.status!=="cancelled")return json({errore:"Si possono eliminare solo gli ordini annullati. Prima imposta lo stato Annullato."},409);
+    const onlyCancelled="EXISTS(SELECT 1 FROM orders WHERE id=? AND status='cancelled')";
+    await env.db.batch([
+     env.db.prepare("DELETE FROM payment_events WHERE order_id=? AND "+onlyCancelled).bind(id,id),
+     env.db.prepare("DELETE FROM stock_reservations WHERE order_id=? AND "+onlyCancelled).bind(id,id),
+     env.db.prepare("DELETE FROM orders WHERE id=? AND status='cancelled'").bind(id)
+    ]);
+    const still=await env.db.prepare("SELECT 1 FROM orders WHERE id=?").bind(id).first();
+    return still?json({errore:"Ordine modificato nel frattempo: premi Aggiorna e riprova."},409):json({ok:true});
+   }
    if(match && request.method==="PATCH"){
     const raw=await request.text();
     if(raw.length>1000) return json({errore:"Richiesta troppo grande"},413);
@@ -387,6 +405,7 @@ main{max-width:960px;margin:0 auto;padding:16px}
 .chi h3{margin:0;font:700 21px/1.2 var(--serif);overflow-wrap:anywhere}
 .pill{display:inline-block;margin-top:4px;padding:2px 10px;border-radius:999px;background:var(--c);color:#fff;font-size:14px;font-weight:600}
 .stato-new .pill{color:#2b1d00}
+.codice-corto{display:inline-block;margin:4px 0 0 8px;padding:2px 8px;border-radius:6px;background:var(--ghiaccio);font-size:14px;font-weight:700;letter-spacing:.06em}
 .importo{margin:0;font:700 22px var(--serif);white-space:nowrap}
 .prodotti{list-style:none;margin:12px 0 0;padding:0;border-top:1px dashed var(--bordo)}
 .prodotti li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:8px 0;border-bottom:1px dashed var(--bordo)}
@@ -398,6 +417,7 @@ main{max-width:960px;margin:0 auto;padding:16px}
 .azioni .wa{background:var(--wa)}
 .azioni .verso-ready{background:var(--pronto)}
 .azioni .verso-collected{background:var(--inchiostro)}
+.azioni .elimina{background:#fff;color:var(--annullato);border:1.5px solid var(--annullato)}
 .azioni .stato{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:15px;color:var(--tenue)}
 .azioni small{flex-basis:100%;color:var(--tenue)}
 .azioni a{color:var(--wa);font-weight:700}
@@ -476,7 +496,7 @@ function confirmationUrl(o){
  let phone=String(o.customer_phone||"").replace(/[^0-9+]/g,"");
  if(phone.startsWith("+"))phone=phone.slice(1);else if(phone.startsWith("00"))phone=phone.slice(2);else if(/^3[0-9]{9}$/.test(phone))phone="39"+phone;else return null;
  if(!/^[1-9][0-9]{6,14}$/.test(phone))return null;
- const text="Ciao "+o.customer_name+", il tuo ordine presso Pescheria da Massimo è confermato. Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time+". Codice ordine: "+o.id+". A presto!";
+ const text="Ciao "+o.customer_name+", il tuo ordine presso Pescheria da Massimo è confermato. Ritiro: "+formatDate(o.pickup_date)+" alle "+o.pickup_time+". Codice ordine: "+shortCode(o.id)+". A presto!";
  return "https://wa.me/"+phone+"?text="+encodeURIComponent(text);
 }
 function element(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
@@ -499,12 +519,13 @@ async function api(path,options={}){
  finally{clearTimeout(timer);}
 }
 function exit(){$("stockProducts").replaceChildren();$("stockMsg").textContent="";authGeneration++;loginBusy=false;$("loginButton").disabled=false;const cleared=removeSavedAccess();rememberWanted=false;$("rememberAccess").checked=false;ordersBaseline=false;lastRev=null;seenOrders.clear();$("newOrders").hidden=true;document.title="Ordini · Pescheria Massimo";$("reportOutput").replaceChildren();$("reportCsv").disabled=true;reportData=null;loadSeq++;token="";$("key").value="";$("orders").replaceChildren();$("summary").replaceChildren();$("totals").textContent="";$("panel").hidden=true;$("login").hidden=false;return cleared;}
+const shortCode=id=>String(id||"").replace(/-/g,"").slice(0,6).toUpperCase();
 const romeToday=()=>new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"});
 const nextDay=d=>{const x=new Date(d+"T12:00:00Z");x.setUTCDate(x.getUTCDate()+1);return x.toISOString().slice(0,10);};
 const shortDate=d=>new Date(d+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"short",day:"numeric",month:"short"});
 const countLabels={new:["nuovo","nuovi"],confirmed:["confermato","confermati"],ready:["pronto","pronti"],collected:["ritirato","ritirati"],cancelled:["annullato","annullati"]};
 const nextStep={confirmed:["ready","Segna come pronto"],ready:["collected","Segna come ritirato"]};
-const quantityText=item=>{const q=item.quantity??item.qta;return (typeof q==="number"?q.toLocaleString("it-IT"):(q??""))+" "+(item.unit??item.unita??"");};
+const quantityText=item=>{const q=item.quantity??item.qta;let unit=item.unit??item.unita??"";if(q===1&&unit==="porzioni")unit="porzione";return (typeof q==="number"?q.toLocaleString("it-IT"):(q??""))+" "+unit;};
 async function load(opts){
  const quiet=opts?.quiet===true;
  const seq=++loadSeq;
@@ -534,7 +555,7 @@ async function load(opts){
   const open=["new","confirmed","ready"].includes(o.status);
   const card=element("article","");card.className="ordine stato-"+o.status;
   const tag=element("div","");tag.className="cartellino";tag.append(element("b",o.pickup_time),element("span",shortDate(o.pickup_date)));
-  const who=element("div","");who.className="chi";const pill=element("span",states[o.status]||o.status);pill.className="pill";who.append(element("h3",o.customer_name),pill);
+  const who=element("div","");who.className="chi";const pill=element("span",states[o.status]||o.status);pill.className="pill";const short=element("span",shortCode(o.id));short.className="codice-corto";short.title="Codice che il cliente vede nella conferma";who.append(element("h3",o.customer_name),pill,short);
   const price=element("p",money(o.total_cents));price.className="importo";
   const head=element("div","");head.className="testa";head.append(tag,who,price);card.append(head);
   const list=element("ul","");list.className="prodotti";
@@ -572,11 +593,21 @@ async function load(opts){
    actions.append(wa);
   }
   if(nextStep[o.status]){const [status,label]=nextStep[o.status];const step=element("button",label);step.type="button";step.className="verso-"+status;step.onclick=()=>{step.disabled=true;change({status});};actions.append(step);}
+  if(o.status==="cancelled"){
+   const del=element("button","Elimina ordine");del.type="button";del.className="elimina";
+   del.onclick=async()=>{
+    if(!confirm("Eliminare per sempre l'ordine di "+o.customer_name+"? Spariscono anche i suoi incassi e rimborsi dal resoconto. Non si può tornare indietro."))return;
+    del.disabled=true;mutations++;
+    try{await api("/api/orders/"+encodeURIComponent(o.id),{method:"DELETE"});$("msg").textContent="Ordine di "+o.customer_name+" eliminato.";await load({quiet:true});}
+    catch(e){$("msg").textContent=e.message;del.disabled=false;}finally{mutations--;}
+   };
+   actions.append(del);
+  }
   const stateLabel=element("label","Stato");stateLabel.className="stato";stateLabel.append(select);actions.append(stateLabel);
   if(["new","confirmed"].includes(o.status))actions.append(element("small","Il messaggio parte solo quando premi Invia in WhatsApp."));
   card.append(actions);
   const payment=element("div","");payment.className="pagamento";
-  payment.append(element("p",o.paid?(o.recorded_balance_cents>0?"Pagato. Incasso registrato: "+money(o.recorded_balance_cents):"Pagato prima del registro: data e importo effettivo non disponibili"):"Da incassare. L'importo del menu è indicativo."));
+  payment.append(element("p",o.paid?(o.recorded_balance_cents>0?"Pagato. Incasso registrato: "+money(o.recorded_balance_cents):"Pagato prima del registro: data e importo effettivo non disponibili"):o.status==="cancelled"?"Annullato: nessun incasso da registrare.":"Da incassare. L'importo del menu è indicativo."));
   const paymentForm=element("form","");
   const amount=element("input","");amount.type="number";amount.min="0.01";amount.max="100000";amount.step="0.01";amount.value=(o.total_cents/100).toFixed(2);amount.required=true;amount.setAttribute("aria-label","Importo effettivo in euro");
   const method=element("select","");method.setAttribute("aria-label","Metodo pagamento");for(const [value,text] of [["cash","Contanti"],["card","Carta"]]){const opt=element("option",text);opt.value=value;method.append(opt);}

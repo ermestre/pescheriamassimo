@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="banner-festivita-20261101">
+<meta name="pm-release" content="gestione-guidata-20261102">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestione Pescheria da Massimo</title>
 <style>
@@ -54,6 +54,10 @@
   .consiglio { background: var(--sabbia); border-left: 4px solid var(--oro); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
   .consiglio p { margin: 4px 0 0; white-space:pre-wrap; }
   .miniatura { width: 100%; max-height: 160px; object-fit: contain; background:#fff; border-radius: 8px; margin-bottom: 8px; }
+.scelte{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}.scelta{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;min-height:42px;border:1.5px solid #c8d4d9;border-radius:999px;background:#fff;color:var(--blu);font:inherit;font-size:14px;cursor:pointer}.scelta[aria-pressed="true"],label.scelta:has(input:checked){background:var(--blu);border-color:var(--blu);color:#fff}label.scelta input{width:18px;height:18px}.scelte.orari .scelta{min-width:68px;justify-content:center}
+.testa-voce{display:flex;gap:12px;align-items:flex-end}.testa-voce .campi{flex:1}.pollice{width:64px;height:64px;border-radius:10px;object-fit:cover;flex:none;background:#efe4d3}.pollice.vuoto{display:grid;place-items:center;font-size:12px;color:var(--grigio)}
+.voce.spenta{opacity:.7}.esito-scheda{margin:8px 0 0;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600}.esito-scheda.ok{background:#e6f4ea;color:var(--verde)}.esito-scheda.manca{background:#fff4d9;color:#7d5400}
+.riga-termine{display:flex;gap:8px}.riga-termine>*{flex:1}.avviso{color:#7d5400}.azioni-voce{display:flex;gap:8px;margin-top:12px}.azioni-voce>*{flex:1;margin:0}
 .riscontro-alto{position:sticky;top:55px;z-index:6;box-shadow:0 2px 8px #0002}.barra{flex-wrap:wrap}#statoBarra{flex-basis:100%;font-size:13px;color:var(--blu);margin:0}input[type="checkbox"]{width:22px;height:22px;vertical-align:middle}.festa-stato{padding:12px;border-left:4px solid var(--oro);background:#fff6df;border-radius:8px;font-size:14px}
 </style>
 </head>
@@ -77,7 +81,7 @@
   <div id="editor" class="nascosto">
     <nav class="schede">
       <button data-scheda-btn="menu" class="attiva">Menu</button>
-      <button data-scheda-btn="pesce">Pesce del giorno</button>
+      <button data-scheda-btn="pesce">Ritiro e ordini</button>
       <button data-scheda-btn="natale">Festività</button>
     </nav>
     <div class="stato riscontro-alto" id="statoAlto" role="status" aria-live="polite"></div>
@@ -132,8 +136,11 @@
         <label for="whatsapp">Numero WhatsApp della pescheria</label>
         <input id="whatsapp" type="tel" inputmode="numeric" placeholder="39 333 1234567">
         <p class="piccolo">Scrivilo con il prefisso 39, senza spazi: es. 393331234567.</p>
-        <label for="entro">Ordini entro (testo che vede il cliente)</label>
-        <input id="entro" type="text" placeholder="18:00 del giorno prima">
+      </section>
+
+      <section>
+        <h2>Ritiro</h2>
+        <div id="ritiroOpzioni"></div>
       </section>
 
       <section>
@@ -205,38 +212,23 @@ const BRANCH = "main";
 const FILE = "menu.json";
 const URL_API = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`;
 
-// Catalogo delle specie più comuni: il nome scientifico è di riferimento, da verificare con il fornitore
+// Catalogo delle specie più comuni: nome commerciale e nome scientifico di riferimento, da verificare con l'etichetta del fornitore.
+// gruppo = allergene corrispondente (pesce, crostacei, molluschi).
 const CATALOGO = [
-  { nome: "Spigola", scientifico: "Dicentrarchus labrax", unita: "kg" },
-  { nome: "Orata", scientifico: "Sparus aurata", unita: "kg" },
-  { nome: "Dentice", scientifico: "Dentex dentex", unita: "kg" },
-  { nome: "Sarago", scientifico: "Diplodus sargus", unita: "kg" },
-  { nome: "Triglia di scoglio", scientifico: "Mullus surmuletus", unita: "kg" },
-  { nome: "Triglia di fango", scientifico: "Mullus barbatus", unita: "kg" },
-  { nome: "Sogliola comune", scientifico: "Solea solea", unita: "kg" },
-  { nome: "Rombo chiodato", scientifico: "Psetta maxima", unita: "kg" },
-  { nome: "Rombo liscio", scientifico: "Scophthalmus rhombus", unita: "kg" },
-  { nome: "Pesce spada", scientifico: "Xiphias gladius", unita: "kg" },
-  { nome: "Tonno rosso", scientifico: "Thunnus thynnus", unita: "kg" },
-  { nome: "Palamita", scientifico: "Sarda sarda", unita: "kg" },
-  { nome: "Ricciola", scientifico: "Seriola dumerili", unita: "kg" },
-  { nome: "Cernia", scientifico: "Epinephelus marginatus", unita: "kg" },
-  { nome: "Cefalo", scientifico: "Mugil cephalus", unita: "kg" },
-  { nome: "Alici", scientifico: "Engraulis encrasicolus", unita: "kg" },
-  { nome: "Sardina", scientifico: "Sardina pilchardus", unita: "kg" },
-  { nome: "Bianchetti", scientifico: "Sardina pilchardus / Engraulis encrasicolus (novellame)", unita: "etto" },
-  { nome: "Gambero rosso di Mazara", scientifico: "Aristaeomorpha foliacea", unita: "kg" },
-  { nome: "Gambero viola", scientifico: "Aristeus antennatus", unita: "kg" },
-  { nome: "Gambero rosa", scientifico: "Parapenaeus longirostris", unita: "kg" },
-  { nome: "Mazzancolla", scientifico: "Melicertus kerathurus", unita: "kg" },
-  { nome: "Scampo", scientifico: "Nephrops norvegicus", unita: "kg" },
-  { nome: "Calamaro", scientifico: "Loligo vulgaris", unita: "kg" },
-  { nome: "Totano", scientifico: "Todarodes sagittatus", unita: "kg" },
-  { nome: "Seppia", scientifico: "Sepia officinalis", unita: "kg" },
-  { nome: "Polpo", scientifico: "Octopus vulgaris", unita: "kg" },
-  { nome: "Cozza", scientifico: "Mytilus galloprovincialis", unita: "kg" },
-  { nome: "Vongola", scientifico: "Ruditapes decussatus", unita: "kg" }
-];
+  ["Spigola o branzino","Dicentrarchus labrax","Pesce"],["Orata","Sparus aurata","Pesce"],["Dentice","Dentex dentex","Pesce"],["Sarago","Diplodus sargus","Pesce"],
+  ["Ombrina","Umbrina cirrosa","Pesce"],["Triglia di scoglio","Mullus surmuletus","Pesce"],["Triglia di fango","Mullus barbatus","Pesce"],["Sogliola","Solea solea","Pesce"],
+  ["Rombo chiodato","Scophthalmus maximus","Pesce"],["Rombo liscio","Scophthalmus rhombus","Pesce"],["Pesce San Pietro","Zeus faber","Pesce"],["Rana pescatrice (coda di rospo)","Lophius piscatorius","Pesce"],
+  ["Nasello","Merluccius merluccius","Pesce"],["Merluzzo bianco","Gadus morhua","Pesce"],["Baccalà (merluzzo salato)","Gadus morhua","Pesce"],["Stoccafisso","Gadus morhua","Pesce"],
+  ["Pesce spada","Xiphias gladius","Pesce"],["Tonno rosso","Thunnus thynnus","Pesce"],["Tonno pinne gialle","Thunnus albacares","Pesce"],["Palamita","Sarda sarda","Pesce"],
+  ["Ricciola","Seriola dumerili","Pesce"],["Cernia bruna","Epinephelus marginatus","Pesce"],["Cefalo o muggine","Mugil cephalus","Pesce"],["Sgombro","Scomber scombrus","Pesce"],
+  ["Alici o acciughe","Engraulis encrasicolus","Pesce"],["Sardina","Sardina pilchardus","Pesce"],["Salmone","Salmo salar","Pesce"],["Trota iridea","Oncorhynchus mykiss","Pesce"],
+  ["Gambero rosso","Aristaeomorpha foliacea","Crostacei"],["Gambero viola","Aristeus antennatus","Crostacei"],["Gambero rosa","Parapenaeus longirostris","Crostacei"],["Mazzancolla","Penaeus kerathurus","Crostacei"],
+  ["Gambero indopacifico (vannamei)","Penaeus vannamei","Crostacei"],["Scampo","Nephrops norvegicus","Crostacei"],["Astice europeo","Homarus gammarus","Crostacei"],["Granchio","Carcinus aestuarii","Crostacei"],
+  ["Calamaro","Loligo vulgaris","Molluschi"],["Totano","Todarodes sagittatus","Molluschi"],["Seppia","Sepia officinalis","Molluschi"],["Polpo","Octopus vulgaris","Molluschi"],
+  ["Moscardino","Eledone moschata","Molluschi"],["Cozza","Mytilus galloprovincialis","Molluschi"],["Vongola verace","Ruditapes decussatus","Molluschi"],["Vongola verace filippina","Ruditapes philippinarum","Molluschi"],
+  ["Lupino (vongola comune)","Chamelea gallina","Molluschi"],["Ostrica concava","Magallana gigas","Molluschi"],["Ostrica piatta","Ostrea edulis","Molluschi"],["Cannolicchio","Ensis minor","Molluschi"],
+  ["Tellina","Donax trunculus","Molluschi"],["Fasolaro","Callista chione","Molluschi"]
+].map(([nome,scientifico,gruppo])=>({nome,scientifico,gruppo,unita:"kg"}));
 
 // ---- STATO ----
 let dati = null;   // contenuto di menu.json
@@ -280,6 +272,7 @@ async function api(metodo, corpo) {
   });
   if (r.status === 401 || r.status === 403) throw new Error("codice non valido o senza permesso di modifica");
   if (r.status === 404) throw new Error("repository o file non trovato");
+  if (r.status === 409 || r.status === 422) throw new Error("il menu è stato modificato da un'altra parte (un altro telefono o un aggiornamento). Premi Ricarica e rifai l'ultima modifica");
   if (!r.ok) throw new Error("errore GitHub " + r.status);
   return r.json();
 }
@@ -311,7 +304,8 @@ async function salva() {
     sha = r.content.sha;
     sporco = false;
     mostraEditor();
-    messaggio("Modifiche salvate. Il sito si aggiorna in 1-2 minuti.", "ok");
+    const incomplete = dati.categorie.flatMap((c, ci) => c.voci.filter(v => v.disponibile && v.stato !== "terminato" && mancanti(ci, v).length).map(v => v.nome));
+    messaggio("Modifiche salvate. Il sito si aggiorna in 1-2 minuti." + (incomplete.length ? " Schede da completare: " + incomplete.join(", ") + "." : ""), incomplete.length ? "info" : "ok");
   } catch (e) {
     messaggio("Salvataggio non riuscito: " + e.message, "err");
   }
@@ -337,7 +331,8 @@ function mostraEditor() {
 
   $("notaMenu").value = dati.nota || "";
   $("whatsapp").value = dati.whatsapp || "";
-  $("entro").value = (dati.ritiro && dati.ritiro.ordini_entro) || "";
+  dati.ritiro ||= {};
+  ridisegnaRitiro();
 
   // pesce in evidenza
   const pesce = dati.categorie.flatMap((c, ci) => c.voci.map((v, vi) => ({ v, ci, vi })));
@@ -416,81 +411,197 @@ function campoTesto(ci, vi, k, etichetta, v) {
   return `<div><label>${etichetta}</label><input type="text" value="${esc(v[k] || "")}" onchange="aggiornaCampo(${ci},${vi},'${k}',this.value)"></div>`;
 }
 
+// ---- SCELTE GUIDATE (Reg. UE 1379/2013, art. 35) ----
+// Metodo di produzione: diciture previste dal regolamento.
+const METODI=["Pescato","Pescato in acque dolci","Allevato"];
+// Categorie di attrezzi: prima colonna dell'allegato III del Reg. UE 1379/2013.
+const ATTREZZI=["Sciabiche","Reti da traino","Reti da imbrocco e reti analoghe","Reti da circuizione e reti da raccolta","Ami e palangari","Draghe","Nasse e trappole"];
+const STATI_PRODOTTO=["Fresco","Decongelato","Congelato","Surgelato"];
+const ALLERGENI=["Pesce","Crostacei","Molluschi","Glutine","Uova","Latte","Sedano","Frutta a guscio","Soia","Senape","Sesamo","Solfiti","Lupini","Arachidi"];
+// Zone FAO: per Atlantico nord-orientale e Mediterraneo serve la sottozona o divisione con un nome comprensibile.
+const ZONE_FAO=[
+ ["Mar Mediterraneo e Mar Nero (zona FAO 37)",[
+  "FAO 37.1.1 Mar Balearico (Mediterraneo occidentale)","FAO 37.1.2 Golfo del Leone (Mediterraneo occidentale)","FAO 37.1.3 Sardegna e Mar Tirreno (Mediterraneo occidentale)",
+  "FAO 37.2.1 Mar Adriatico (Mediterraneo centrale)","FAO 37.2.2 Mar Ionio e Canale di Sicilia (Mediterraneo centrale)",
+  "FAO 37.3.1 Mar Egeo (Mediterraneo orientale)","FAO 37.3.2 Levante (Mediterraneo orientale)",
+  "FAO 37.4.1 Mar di Marmara","FAO 37.4.2 Mar Nero","FAO 37.4.3 Mar d'Azov"]],
+ ["Atlantico nord-orientale (zona FAO 27)",[
+  "FAO 27.1 Mare di Barents","FAO 27.2 Mare di Norvegia","FAO 27.3 Skagerrak, Kattegat e Mar Baltico","FAO 27.4 Mare del Nord",
+  "FAO 27.5 Islanda e Isole Fær Øer","FAO 27.6 Rockall e Scozia nord-occidentale","FAO 27.7 Mare d'Irlanda, Manica e Mare Celtico",
+  "FAO 27.8 Golfo di Biscaglia","FAO 27.9 Acque portoghesi","FAO 27.10 Isole Azzorre","FAO 27.14 Groenlandia orientale"]],
+ ["Altri mari e oceani",[
+  "FAO 21 Atlantico nord-occidentale","FAO 31 Atlantico centro-occidentale","FAO 34 Atlantico centro-orientale","FAO 41 Atlantico sud-occidentale","FAO 47 Atlantico sud-orientale",
+  "FAO 51 Oceano Indiano occidentale","FAO 57 Oceano Indiano orientale","FAO 61 Pacifico nord-occidentale","FAO 67 Pacifico nord-orientale","FAO 71 Pacifico centro-occidentale",
+  "FAO 77 Pacifico centro-orientale","FAO 81 Pacifico sud-occidentale","FAO 87 Pacifico sud-orientale","FAO 18 Mare Artico","FAO 48 Atlantico antartico","FAO 58 Oceano Indiano antartico","FAO 88 Pacifico antartico"]]
+];
+const PAESI_ALLEVAMENTO=["Italia","Grecia","Turchia","Spagna","Croazia","Francia","Norvegia","Scozia (Regno Unito)","Irlanda","Paesi Bassi","Cile","Ecuador","Vietnam","India"];
+const PREPARAZIONI=["Intero","Pulito","Sfilettato","Sgusciato","A tranci","Già sgusciato","A filetti"];
+const ORE_GRIGLIA=Array.from({length:29},(_,i)=>{const m=7*60+i*30;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");}); // 07:00 - 21:00
+const ORARI_STANDARD=["09:00","09:30","10:00","10:30","11:00","11:30","12:00","17:00","17:30","18:00","18:30","19:00"];
+const ORARI_SERA_STANDARD=["18:30","19:00","19:30","20:00"];
+
+function pulsantiScelta(valori,attuale,azione,multipla){
+ const scelti=multipla?new Set(String(attuale||"").split(",").map(x=>x.trim()).filter(Boolean)):null;
+ return `<div class="scelte">${valori.map(x=>{const on=multipla?scelti.has(x):String(attuale||"").toLowerCase()===x.toLowerCase();return `<button type="button" class="scelta" aria-pressed="${on}" onclick="${azione.replace("§",esc(x).replace(/'/g,"\\'"))}">${esc(x)}</button>`;}).join("")}</div>`;
+}
+// Prodotti ittici non trasformati: pesce fresco e qualsiasi voce con nome scientifico.
+function ittico(ci,v){return dati.categorie[ci]?.id==="pesce-fresco"||Boolean(v.nome_scientifico);}
+function mancanti(ci,v){
+ const m=[];
+ if(ittico(ci,v)){
+  if(!v.nome_scientifico)m.push("nome scientifico");
+  if(!v.metodo)m.push("metodo di produzione");
+  const allevato=/allev/i.test(v.metodo||"");
+  if(!v.zona_fao)m.push(allevato?"paese di allevamento":"zona di cattura");
+  if(v.metodo&&!allevato&&!v.attrezzo)m.push("attrezzo di pesca");
+  if(!v.stato_prodotto)m.push("fresco o decongelato");
+ }
+ if(!v.allergeni)m.push("allergeni");
+ return m;
+}
+function esitoScheda(ci,v){const m=mancanti(ci,v);return m.length?`<p class="esito-scheda manca">Da completare: ${esc(m.join(", "))}</p>`:`<p class="esito-scheda ok">Scheda completa</p>`;}
+
+function ridisegnaVoce(ci,vi){
+ const el=document.getElementById(`voce-${ci}-${vi}`);if(!el){mostraEditor();return;}
+ const aperti=[...el.querySelectorAll("details")].map(d=>d.open);
+ el.outerHTML=voceHtml(ci,vi,dati.categorie[ci].voci[vi]);
+ const nuovo=document.getElementById(`voce-${ci}-${vi}`);
+ [...nuovo.querySelectorAll("details")].forEach((d,i)=>{if(aperti[i])d.open=true;});
+}
+function scegli(ci,vi,k,val){const v=dati.categorie[ci].voci[vi];v[k]=String(v[k]||"").toLowerCase()===String(val).toLowerCase()?"":val;if(k==="metodo"&&/allev/i.test(v.metodo||""))v.attrezzo="";segna();ridisegnaVoce(ci,vi);}
+function alterna(ci,vi,k,val){const v=dati.categorie[ci].voci[vi];const s=new Set(String(v[k]||"").split(",").map(x=>x.trim()).filter(Boolean));s.has(val)?s.delete(val):s.add(val);v[k]=ALLERGENI.filter(x=>s.has(x)).concat([...s].filter(x=>!ALLERGENI.includes(x))).join(", ");segna();ridisegnaVoce(ci,vi);}
+function scegliSpecie(ci,vi,indice){
+ const v=dati.categorie[ci].voci[vi],s=CATALOGO[Number(indice)];if(!s)return;
+ v.nome_scientifico=s.scientifico;
+ if(!v.allergeni)v.allergeni=s.gruppo;
+ if(!v.nome||/^Nuov/.test(v.nome))v.nome=s.nome;
+ segna();ridisegnaVoce(ci,vi);
+}
+function aggiornaCampoVoce(ci,vi,k,val){dati.categorie[ci].voci[vi][k]=String(val).trim();segna();ridisegnaVoce(ci,vi);}
+function aggiornaTermineVoce(ci,vi){
+ const ora=document.getElementById(`termine-ora-${ci}-${vi}`).value,giorno=document.getElementById(`termine-giorno-${ci}-${vi}`).value;
+ const v=dati.categorie[ci].voci[vi];
+ if(!ora)delete v.ordini_entro;else v.ordini_entro=ora+" del giorno "+giorno;
+ segna();ridisegnaVoce(ci,vi);
+}
+function aggiornaSera(ci,vi,on){const v=dati.categorie[ci].voci[vi];if(on)v.su_ordinazione=true;else delete v.su_ordinazione;segna();ridisegnaVoce(ci,vi);}
+function selettoreTermine(idOra,idGiorno,valore,azione,vuoto){
+ const m=String(valore||"").match(/^(\d{2}:\d{2}) del giorno (prima|stesso)$/i);
+ const ora=m?m[1]:"",giorno=m?m[2].toLowerCase():"prima";
+ return `<div class="riga-termine"><select id="${idOra}" onchange="${azione}">${vuoto?`<option value="">${vuoto}</option>`:""}${ORE_GRIGLIA.map(o=>`<option ${o===ora?"selected":""}>${o}</option>`).join("")}</select><select id="${idGiorno}" onchange="${azione}"><option value="prima" ${giorno==="prima"?"selected":""}>del giorno prima</option><option value="stesso" ${giorno==="stesso"?"selected":""}>del giorno stesso</option></select></div>`;
+}
+
 function voceHtml(ci, vi, v) {
+  const allevato=/allev/i.test(v.metodo||"");
+  const specie=CATALOGO.findIndex(s=>s.scientifico===v.nome_scientifico);
+  const zona=allevato
+   ?`<label>Paese di allevamento</label>${pulsantiScelta(PAESI_ALLEVAMENTO,v.zona_fao,`scegli(${ci},${vi},'zona_fao','§')`)}<input type="text" placeholder="Altro paese" value="${PAESI_ALLEVAMENTO.includes(v.zona_fao)?"":esc(v.zona_fao||"")}" onchange="aggiornaCampoVoce(${ci},${vi},'zona_fao',this.value)">`
+   :`<label>Zona di cattura</label><select onchange="aggiornaCampoVoce(${ci},${vi},'zona_fao',this.value)"><option value="">Scegli la zona FAO</option>${ZONE_FAO.map(([g,zz])=>`<optgroup label="${esc(g)}">${zz.map(z=>`<option ${z===v.zona_fao?"selected":""}>${esc(z)}</option>`).join("")}</optgroup>`).join("")}${v.zona_fao&&!ZONE_FAO.some(([,zz])=>zz.includes(v.zona_fao))?`<option selected>${esc(v.zona_fao)}</option>`:""}</select>${v.zona_fao&&!ZONE_FAO.some(([,zz])=>zz.includes(v.zona_fao))?`<p class="piccolo avviso">Il valore "${esc(v.zona_fao)}" non indica la sottozona FAO: sceglila dall'elenco.</p>`:""}`;
   return `
-    <div class="voce">
-      <div class="campi uno">
-        ${campoTesto(ci, vi, "nome", "Nome del prodotto (togli \"da confermare\" quando è sicuro)", v)}
+    <div class="voce${v.disponibile?"":" spenta"}" id="voce-${ci}-${vi}">
+      <div class="testa-voce">
+        ${v.foto?`<img class="pollice" src="${esc(v.foto)}" alt="">`:`<span class="pollice vuoto">Foto</span>`}
+        <div class="campi uno">${campoTesto(ci, vi, "nome", "Nome del prodotto", v)}</div>
       </div>
-      ${v.descrizione ? `<div class="desc">${esc(v.descrizione)}</div>` : ""}
-      <button class="secondario" style="width:100%;margin:8px 0" onclick="anteprima(${ci},${vi})">Vedi scheda come la vede il cliente</button>
       <div class="campi">
-        <div>
-          <label>Prezzo €</label>
-          <input type="number" step="0.01" min="0" value="${v.prezzo ?? ""}" onchange="aggiornaPrezzo(${ci},${vi},this.value)">
-        </div>
-        <div>
-          <label>Vendita</label>
-          <select onchange="aggiornaUnita(${ci},${vi},this.value)">
+        <div><label>Prezzo €</label><input type="number" step="0.01" min="0" inputmode="decimal" value="${v.prezzo ?? ""}" onchange="aggiornaPrezzo(${ci},${vi},this.value)"></div>
+        <div><label>Si vende</label><select onchange="aggiornaUnita(${ci},${vi},this.value)">
             <option value="" ${!v.unita ? "selected" : ""}>a porzione</option>
             <option value="kg" ${v.unita === "kg" ? "selected" : ""}>al kg</option>
-            <option value="etto" ${v.unita === "etto" ? "selected" : ""}>all'etto</option>
-          </select>
-        </div>
-        <div>
-          <label class="check"><input type="checkbox" ${v.disponibile ? "checked" : ""} onchange="aggiornaDisponibile(${ci},${vi},this.checked)"> In vendita</label>
-        </div>
+            <option value="etto" ${v.unita === "etto" ? "selected" : ""}>all'etto</option></select></div>
+        <div><label class="check"><input type="checkbox" ${v.disponibile ? "checked" : ""} onchange="aggiornaDisponibile(${ci},${vi},this.checked);ridisegnaVoce(${ci},${vi})"> In vendita</label></div>
       </div>
-      <div class="campi uno">
-        <div>
-          <label>Stato</label>
-          <select onchange="aggiornaCampo(${ci},${vi},'stato',this.value)">
-            <option value="disponibile" ${!v.stato || v.stato === "disponibile" ? "selected" : ""}>Disponibile</option>
-            <option value="esaurito" ${v.stato === "esaurito" ? "selected" : ""}>Esaurito (visibile al cliente, non ordinabile)</option>
-            <option value="terminato" ${v.stato === "terminato" ? "selected" : ""}>Terminato (nascosto al cliente)</option>
-          </select>
-        </div>
-      </div>
+      <label>Oggi</label>
+      ${pulsantiScelta(["Disponibile","Esaurito","Terminato"],({esaurito:"Esaurito",terminato:"Terminato"})[v.stato]||"Disponibile",`impostaStato(${ci},${vi},'§')`)}
+      <p class="piccolo">Esaurito: il cliente lo vede ma non lo ordina. Terminato: nascosto.</p>
+      ${esitoScheda(ci,v)}
       <details>
         <summary>Foto</summary>
         ${v.foto ? `<img class="miniatura" src="${esc(v.foto)}" alt="">` : ""}
-        <label>Carica una foto (si ridimensiona da sola)</label>
+        <label>Scatta o scegli una foto (si ridimensiona da sola)</label>
         <input type="file" accept="image/*" onchange="caricaFoto(${ci},${vi},this)">
+        <label>Didascalia (facoltativa)</label>
+        ${pulsantiScelta(["Immagine indicativa"],v.foto_didascalia,`scegli(${ci},${vi},'foto_didascalia','§')`)}
       </details>
       <details>
-        <summary>Preparazioni disponibili</summary>
-        <p class="piccolo">Attiva solo i servizi confermati da Massimo. Nessun supplemento viene aggiunto automaticamente. Se tutti i campi sono vuoti il cliente non vede questa scelta.</p>
-        ${["Intero","Pulito","Sfilettato","Sgusciato","A tranci","Già sgusciato","A filetti"].map(x=>`<label class="check"><input type="checkbox" ${(v.preparazioni||[]).includes(x)?"checked":""} onchange="aggiornaPreparazioni(${ci},${vi},'${x}',this.checked)"> ${x}</label>`).join("")}
+        <summary>Preparazioni e ritiro</summary>
+        <p class="piccolo">Tocca le lavorazioni che Massimo offre per questo prodotto. Nessun supplemento viene aggiunto.</p>
+        <div class="scelte">${PREPARAZIONI.map(x=>`<label class="scelta"><input type="checkbox" ${(v.preparazioni||[]).includes(x)?"checked":""} onchange="aggiornaPreparazioni(${ci},${vi},'${x}',this.checked);ridisegnaVoce(${ci},${vi})"> ${x}</label>`).join("")}</div>
+        <label class="check"><input type="checkbox" ${v.su_ordinazione?"checked":""} onchange="aggiornaSera(${ci},${vi},this.checked)"> Su ordinazione: ritiro solo negli orari serali</label>
+        <label>Termine ordini solo per questo prodotto</label>
+        ${selettoreTermine(`termine-ora-${ci}-${vi}`,`termine-giorno-${ci}-${vi}`,v.ordini_entro,`aggiornaTermineVoce(${ci},${vi})`,"Come il resto del menu")}
+        <label>Porzione (es. 300 g)</label><input type="text" value="${esc(v.porzione||"")}" onchange="aggiornaCampoVoce(${ci},${vi},'porzione',this.value)">
       </details>
       <details>
-        <summary>Scheda del pesce e tracciabilità</summary>
-        <p class="piccolo">Compila dai documenti del fornitore. Questi dati sono pubblici nella scheda del prodotto. Lascia vuoto ciò che non sai. Lotto e zona FAO sono informazioni diverse.</p>
-        <div class="campi">
-          <div><label>Stato del prodotto (da etichetta)</label><select onchange="aggiornaCampo(${ci},${vi},'stato_prodotto',this.value)">${["","Fresco","Decongelato","Congelato","Surgelato"].map(x=>`<option value="${x}" ${v.stato_prodotto===x?"selected":""}>${x||"Da compilare"}</option>`).join("")}</select></div>
-          ${campoTesto(ci, vi, "lotto_fornitore", "Lotto originale del fornitore", v)}
-          ${campoTesto(ci, vi, "paese_origine", "Paese di origine dichiarato", v)}
-          ${campoTesto(ci, vi, "data_pesca", "Data di pesca (solo se documentata)", v)}
-          ${campoTesto(ci, vi, "nome_scientifico", "Nome scientifico", v)}
-          ${campoLista(ci, vi, "zona_fao", "Zona FAO / paese", v,"lista-zone")}
-          ${campoLista(ci, vi, "metodo", "Produzione: pescato / allevato (da etichetta)", v,"lista-metodo")}
-          ${campoTesto(ci, vi, "provenienza", "Provenienza documentata / mercato", v)}
-          ${campoTesto(ci, vi, "data_arrivo", "Arrivo in pescheria (non data di pesca)", v)}
-          ${campoTesto(ci, vi, "ora_arrivo", "Ora di arrivo (es. 07:30)", v)}
-          ${campoLista(ci, vi, "attrezzo", "Attrezzo di pesca", v,"lista-attrezzi")}
-          ${campoTesto(ci, vi, "allergeni", "Allergeni", v)}
-          ${campoTesto(ci, vi, "glassatura", "Glassatura (%) da etichetta", v)}
-          ${campoTesto(ci, vi, "data_congelamento", "Data di congelamento da etichetta", v)}
-          ${campoTesto(ci, vi, "foto_didascalia", "Didascalia foto (es. Immagine indicativa)", v)}
-          ${campoTesto(ci, vi, "porzione", "Porzione (es. 300 g)", v)}
-        </div>
-        <div class="campi uno" style="margin-top:8px">
-          <div><label>Il consiglio di Massimo: come cucinarlo</label><textarea placeholder="Es. In padella con due pomodorini e aglio (scrivi il consiglio concordato con Massimo)" rows="4" onchange="aggiornaCampo(${ci},${vi},'consiglio',this.value)">${esc(v.consiglio||"")}</textarea></div>
-        </div>
+        <summary>Scheda del pesce (informazioni obbligatorie)</summary>
+        <p class="piccolo">Copia i dati dall'etichetta o dal documento del fornitore. Se non li sai, lascia vuoto: non vanno inventati.</p>
+        <label>Specie (riempie il nome scientifico)</label>
+        <select onchange="scegliSpecie(${ci},${vi},this.value)"><option value="">${v.nome_scientifico&&specie<0?esc(v.nome_scientifico):"Scegli la specie"}</option>${CATALOGO.map((s,i)=>`<option value="${i}" ${i===specie?"selected":""}>${esc(s.nome)} (${esc(s.scientifico)})</option>`).join("")}</select>
+        <label>Nome scientifico</label><input type="text" value="${esc(v.nome_scientifico||"")}" onchange="aggiornaCampoVoce(${ci},${vi},'nome_scientifico',this.value)">
+        <label>Metodo di produzione</label>
+        ${pulsantiScelta(METODI,v.metodo,`scegli(${ci},${vi},'metodo','§')`)}
+        ${zona}
+        ${allevato?"":`<label>Attrezzo di pesca</label>${pulsantiScelta(ATTREZZI,v.attrezzo,`scegli(${ci},${vi},'attrezzo','§')`)}`}
+        <label>Stato del prodotto</label>
+        ${pulsantiScelta(STATI_PRODOTTO,v.stato_prodotto,`scegli(${ci},${vi},'stato_prodotto','§')`)}
+        <label>Allergeni</label>
+        ${pulsantiScelta(ALLERGENI,v.allergeni,`alterna(${ci},${vi},'allergeni','§')`,true)}
+        <details>
+          <summary>Altre informazioni (facoltative)</summary>
+          <div class="campi">
+            ${campoTesto(ci, vi, "lotto_fornitore", "Lotto del fornitore", v)}
+            <div><label>Arrivato in pescheria il</label><input type="date" value="${esc(v.data_arrivo||"")}" onchange="aggiornaCampo(${ci},${vi},'data_arrivo',this.value)"></div>
+            <div><label>Ora di arrivo</label><input type="time" value="${esc(v.ora_arrivo||"")}" onchange="aggiornaCampo(${ci},${vi},'ora_arrivo',this.value)"></div>
+            <div><label>Data di pesca (se documentata)</label><input type="date" value="${esc(v.data_pesca||"")}" onchange="aggiornaCampo(${ci},${vi},'data_pesca',this.value)"></div>
+            ${campoTesto(ci, vi, "paese_origine", "Paese di origine dichiarato", v)}
+            ${campoTesto(ci, vi, "provenienza", "Mercato o fornitore", v)}
+            ${campoTesto(ci, vi, "glassatura", "Glassatura (%)", v)}
+            <div><label>Data di congelamento</label><input type="date" value="${esc(v.data_congelamento||"")}" onchange="aggiornaCampo(${ci},${vi},'data_congelamento',this.value)"></div>
+          </div>
+        </details>
+      </details>
+      <details>
+        <summary>Il consiglio di Massimo</summary>
+        <textarea placeholder="Es. In padella con due pomodorini e aglio" rows="3" onchange="aggiornaCampo(${ci},${vi},'consiglio',this.value)">${esc(v.consiglio||"")}</textarea>
+        <label>Descrizione breve (facoltativa)</label><input type="text" value="${esc(v.descrizione||"")}" onchange="aggiornaCampo(${ci},${vi},'descrizione',this.value)">
       </details>
       ${archivioArriviHtml(v)}
-      <button class="elimina" onclick="eliminaVoce(${ci},${vi})">Elimina voce</button>
+      <div class="azioni-voce">
+        <button class="secondario" type="button" onclick="anteprima(${ci},${vi})">Vedi come la vede il cliente</button>
+        <button class="elimina" type="button" onclick="eliminaVoce(${ci},${vi})">Elimina</button>
+      </div>
     </div>`;
 }
+function impostaStato(ci,vi,etichetta){dati.categorie[ci].voci[vi].stato=({Esaurito:"esaurito",Terminato:"terminato"})[etichetta]||"disponibile";segna();ridisegnaVoce(ci,vi);}
+
+// ---- RITIRO E ORDINI ----
+function ritiroHtml(){
+ const r=dati.ritiro||{};
+ const orari=r.orari||ORARI_STANDARD,sera=r.orari_sera||ORARI_SERA_STANDARD;
+ return `<label>Termine generale per ordinare</label>
+ ${selettoreTermine("termineOra","termineGiorno",r.ordini_entro||"18:00 del giorno prima","aggiornaTermineGenerale()")}
+ <p class="piccolo">Vale per tutti i prodotti, salvo quelli con un termine proprio (per esempio la frittura).</p>
+ <label>Orari di ritiro (tocca per attivare o togliere)</label>
+ <div class="scelte orari">${ORE_GRIGLIA.map(o=>`<button type="button" class="scelta" aria-pressed="${orari.includes(o)}" onclick="alternaOrario('orari','${o}')">${o}</button>`).join("")}</div>
+ <label>Orari serali per i prodotti su ordinazione</label>
+ <div class="scelte orari">${ORE_GRIGLIA.filter(o=>o>="16:00").map(o=>`<button type="button" class="scelta" aria-pressed="${sera.includes(o)}" onclick="alternaOrario('orari_sera','${o}')">${o}</button>`).join("")}</div>
+ <label>Giorni di chiusura straordinaria</label>
+ <div class="riga-termine"><input type="date" id="nuovaChiusura"><button type="button" class="secondario" onclick="aggiungiChiusura()">Aggiungi</button></div>
+ <div class="scelte">${(r.chiusure||[]).map(d=>`<button type="button" class="scelta" aria-pressed="true" onclick="togliChiusura('${esc(d)}')">${esc(new Date(d+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"short",day:"numeric",month:"short"}))} ✕</button>`).join("")||'<p class="piccolo">Nessuna chiusura straordinaria. Il lunedì è sempre chiuso.</p>'}</div>
+ <label class="check"><input type="checkbox" ${r.attivo===false?"":"checked"} onchange="dati.ritiro.attivo=this.checked;segna()"> Ordini online attivi</label>
+ <p class="piccolo">Togli la spunta per sospendere temporaneamente gli ordini (per esempio per ferie).</p>`;
+}
+function ridisegnaRitiro(){$("ritiroOpzioni").innerHTML=ritiroHtml();}
+function aggiornaTermineGenerale(){dati.ritiro ||= {};dati.ritiro.ordini_entro=$("termineOra").value+" del giorno "+$("termineGiorno").value;segna();}
+function alternaOrario(chiave,o){
+ dati.ritiro ||= {};
+ const base=dati.ritiro[chiave]||(chiave==="orari"?ORARI_STANDARD:ORARI_SERA_STANDARD);
+ const s=new Set(base);s.has(o)?s.delete(o):s.add(o);
+ if(!s.size){messaggio("Lascia almeno un orario di ritiro.","err");return;}
+ dati.ritiro[chiave]=[...s].sort();segna();ridisegnaRitiro();
+}
+function aggiungiChiusura(){const d=$("nuovaChiusura").value;if(!d)return;dati.ritiro ||= {};const s=new Set(dati.ritiro.chiusure||[]);s.add(d);dati.ritiro.chiusure=[...s].sort();segna();ridisegnaRitiro();}
+function togliChiusura(d){dati.ritiro.chiusure=(dati.ritiro.chiusure||[]).filter(x=>x!==d);segna();ridisegnaRitiro();}
 
 
 // Archivio pubblico dei soli dati di provenienza: nessuna fattura o dato personale.
@@ -523,7 +634,6 @@ function leggiTestate() {
   dati.nota = $("notaMenu").value.trim();
   dati.whatsapp = $("whatsapp").value.replace(/\D/g, "");
   dati.ritiro = dati.ritiro || {};
-  dati.ritiro.ordini_entro = $("entro").value.trim();
   // una sola voce in evidenza
   tutteLeVoci().forEach(v => delete v.in_evidenza);
   const sel = $("evidenza").value;
@@ -570,14 +680,14 @@ function aggiungiDaCatalogo() {
   const s = CATALOGO[Number($("catalogo").value)];
   const ci = dati.categorie.findIndex(c => c.id === "pesce-fresco");
   if (!s || ci < 0) { messaggio("Categoria Pesce fresco non trovata.", "err"); return; }
-  if (dati.categorie[ci].voci.some(v => v.nome.toLowerCase() === s.nome.toLowerCase())) {
+  if (dati.categorie[ci].voci.some(v => v.nome.toLowerCase() === s.nome.toLowerCase() && v.stato !== "terminato")) {
     messaggio(`${s.nome} è già nel menu.`, "info"); return;
   }
   leggiTestate();
   dati.categorie[ci].voci.push({
     id: slugNome(s.nome), nome: s.nome, descrizione: "", prezzo: 0, unita: s.unita,
     nome_scientifico: s.scientifico, zona_fao: "", metodo: "", provenienza: "",
-    data_arrivo: "", attrezzo: "", allergeni: "",
+    data_arrivo: "", attrezzo: "", allergeni: s.gruppo,
     disponibile: false, stato: "disponibile"
   });
   segna();
@@ -649,32 +759,40 @@ async function caricaFoto(ci, vi, input) {
 // ---- ANTEPRIMA DELLA SCHEDA (come la vede il cliente) ----
 function anteprima(ci, vi) {
   const v = dati.categorie[ci].voci[vi];
-  const righe = [];
-  if(v.lotto_fornitore)righe.push(["Lotto del fornitore",esc(v.lotto_fornitore)]);
-  if(v.paese_origine)righe.push(["Paese di origine",esc(v.paese_origine)]);
-  if(v.data_pesca)righe.push(["Data di pesca dichiarata",esc(v.data_pesca)]);
-  if (v.stato_prodotto||v.condizione) righe.push(["Stato del prodotto",esc(v.stato_prodotto||v.condizione)]);
-  if (v.glassatura) righe.push(["Glassatura",esc(v.glassatura)+" %"]);
-  if (v.data_congelamento) righe.push(["Data di congelamento",esc(v.data_congelamento)]);
-  if (v.preparazioni?.length) righe.push(["Preparazioni",esc(v.preparazioni.join(", "))]);
-  if (v.nome_scientifico) righe.push(["Nome scientifico", `<i>${esc(v.nome_scientifico)}</i>`]);
-  if (v.zona_fao) righe.push([v.metodo && /allev/i.test(v.metodo) ? "Paese di allevamento" : "Zona di pesca (FAO)", esc(v.zona_fao)]);
-  if (v.metodo) righe.push(["Metodo", esc(v.metodo)]);
-  if (v.attrezzo) righe.push(["Pescato con", esc(v.attrezzo)]);
-  if (v.provenienza) righe.push(["Dal mercato", esc(v.provenienza)]);
-  if (v.data_arrivo || v.ora_arrivo) righe.push(["Arrivato", esc([v.data_arrivo, v.ora_arrivo ? "alle " + v.ora_arrivo : ""].filter(Boolean).join(" "))]);
-  if (v.allergeni) righe.push(["Allergeni", esc(v.allergeni)]);
-  if (v.porzione) righe.push(["Porzione", esc(v.porzione)]);
   const consiglio = v.consiglio ? `<div class="consiglio"><b>Il consiglio di Massimo</b><p>${esc(v.consiglio)}</p></div>` : "";
   $("anteprimaCorpo").innerHTML = `
     <p class="piccolo">Anteprima: così la vede il cliente (usa anche i dati non ancora salvati)</p>
     ${v.foto ? `<img class="carta-foto" src="${esc(v.foto)}" alt="">` : ""}
     <h3>${esc(v.nome)}</h3>
-    ${righe.length ? `<dl class="carta-dati">${righe.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>` : `<p class="piccolo">Nessun dato di tracciabilità ancora inserito.</p>`}
+    ${righeScheda(v)}
+    ${mancanti(ci,v).length?`<p class="esito-scheda manca">Da completare: ${esc(mancanti(ci,v).join(", "))}</p>`:""}
     ${v.foto_didascalia?`<p class="piccolo">${esc(v.foto_didascalia)}</p>`:""}
     ${consiglio}
     <button class="secondario" style="width:100%;margin-top:14px" onclick="chiudiAnteprima()">Chiudi</button>`;
   $("anteprima").classList.add("aperta");
+}
+// Stesso ordine della scheda nel menu clienti: prima le informazioni obbligatorie, poi le facoltative.
+function righeScheda(v){
+  const data=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||"")?new Date(d+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",day:"numeric",month:"long",year:"numeric"}):d;
+  const allevato=/allev/i.test(v.metodo||"");
+  const righe=[
+   ["Denominazione",esc(v.nome)],
+   v.nome_scientifico&&["Nome scientifico",`<i>${esc(v.nome_scientifico)}</i>`],
+   v.metodo&&["Metodo di produzione",esc(v.metodo)],
+   v.zona_fao&&[allevato?"Paese di allevamento":"Zona di cattura",esc(v.zona_fao)],
+   v.attrezzo&&!allevato&&["Attrezzo di pesca",esc(v.attrezzo)],
+   (v.stato_prodotto||v.condizione)&&["Stato",esc(v.stato_prodotto||v.condizione)],
+   v.allergeni&&["Allergeni",esc(v.allergeni)],
+   v.data_congelamento&&["Data di congelamento",esc(data(v.data_congelamento))],
+   v.glassatura&&["Glassatura",esc(v.glassatura)+" %"],
+   v.lotto_fornitore&&["Lotto del fornitore",esc(v.lotto_fornitore)],
+   v.paese_origine&&["Paese di origine",esc(v.paese_origine)],
+   v.data_pesca&&["Data di pesca",esc(data(v.data_pesca))],
+   (v.data_arrivo||v.ora_arrivo)&&["Arrivato in pescheria",esc([data(v.data_arrivo),v.ora_arrivo?"alle "+v.ora_arrivo:""].filter(Boolean).join(" "))],
+   v.preparazioni?.length&&["Preparazioni",esc(v.preparazioni.join(", "))],
+   v.porzione&&["Porzione",esc(v.porzione)]
+  ].filter(Boolean);
+  return `<dl class="carta-dati">${righe.map(([k,val])=>`<dt>${k}</dt><dd>${val}</dd>`).join("")}</dl>`;
 }
 function chiudiAnteprima() { $("anteprima").classList.remove("aperta"); }
 
