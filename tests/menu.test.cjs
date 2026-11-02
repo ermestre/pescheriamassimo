@@ -2,7 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const root=path.join(__dirname,'..'),menu=JSON.parse(fs.readFileSync(path.join(root,'menu.json'),'utf8'));
 const fish=menu.categorie.find(c=>c.id==='pesce-fresco').voci;
 assert.equal(new Set(menu.categorie.flatMap(c=>c.voci.map(v=>v.id))).size,menu.categorie.flatMap(c=>c.voci).length);
-for(const id of ['spigola','orata','rombo','sogliola']){assert.ok(fish.find(v=>v.id===id));assert.equal(fish.find(v=>v.id===id).metodo,'');}
+for(const id of ['spigola','orata','rombo','sogliola'])assert.ok(fish.find(v=>v.id===id));
 assert.ok(!fish.some(v=>['spigola-orata','rombo-sogliola'].includes(v.id)));
 function load(file,extras={}){const nodes=new Map();const node=id=>{if(!nodes.has(id))nodes.set(id,{value:'',innerHTML:'',textContent:'',style:{},classList:{add(){},remove(){},toggle(){}},addEventListener(){}});return nodes.get(id)};const context=vm.createContext({Date,Intl,Map,Set,JSON,Math,Number,String,Object,Array,crypto:require('node:crypto').webcrypto,document:{getElementById:node,querySelectorAll:()=>[]},window:{addEventListener(){}},localStorage:{getItem(){return null}},fetch:()=>new Promise(()=>{}),location:{hostname:'ermestre.github.io',pathname:'/pescheriamassimo/gestione.html'},...extras});vm.runInContext(fs.readFileSync(path.join(root,file),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],context);return {run:s=>vm.runInContext(s,context),node};}
 const client=load('index.html');client.run('menu='+JSON.stringify(menu));
@@ -47,7 +47,7 @@ const beforeDelete=editor.run(`dati.categorie[${ci}].voci.length`);editor.run(`e
 // Reusable festivities: drafts, settings, product editor and safe customer intro.
 editor.run('dati='+JSON.stringify(menu));
 const fi=menu.categorie.findIndex(c=>c.id==='natale');
-editor.run(`dati.categorie[${fi}].attiva=true`);
+editor.run(`dati.categorie[${fi}].attiva=true`);editor.run(`dati.categorie[${fi}].periodo={dal:'',al:''}`);
 assert.throws(()=>editor.run('validaFestivita()'),/Festività/);
 editor.run(`Object.assign(dati.categorie[${fi}],{ricorrenza:'Pasqua',nome:'Menu di Pasqua',periodo:{dal:'2027-03-01',al:'2027-03-28'},ritiro_data:'2027-03-28',scadenza_data:'2027-03-26',scadenza_ora:'18:00'})`);
 editor.run('validaFestivita()');

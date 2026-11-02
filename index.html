@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="pm-release" content="festivita-animata-20261101">
+<meta name="pm-release" content="ritiro-valido-20261102">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pescheria da Massimo</title>
 <style>
@@ -37,6 +37,7 @@
   .btn { width:38px; height:38px; border-radius:50%; border:0; background: var(--blu); color:#fff; font-size:22px; line-height:1; cursor:pointer; }
   .btn:disabled { background:#c9c9c9; cursor:default; }
   .btn.piu { background: var(--oro); color:#222; font-weight:700; }
+  .btn.piu:disabled { background:#c9c9c9; color:#fff; }
   .qta { min-width:20px; text-align:center; font-weight:700; }
   .ritiro { background:#fff; border-radius:12px; padding:14px; margin-top: 10px; }
   .ritiro label { display:block; font-size: 13px; color: var(--grigio); margin: 10px 0 4px; }
@@ -90,6 +91,10 @@
 @keyframes stelle-festa{0%,100%{transform:translateY(0);opacity:.35}50%{transform:translateY(4px);opacity:.6}}
 @media(prefers-reduced-motion:reduce){.banner-festa::before,.banner-festa::after{animation:none}.banner-festa::before{display:none}}
 
+.nota-ritiro{margin:8px 0 0;padding:10px 12px;border-radius:8px;background:#fff4d9;color:#5c3d00;font-size:14px;font-weight:600}
+#invioStato.esito-errore{background:#fdecea;color:#8a1c12;border:2px solid #b3261e;border-radius:10px;padding:12px 14px;font-weight:700;font-size:16px}
+#invioStato.esito-ok{background:#e6f4ea;color:#1d5c32;border:2px solid #2f7d55;border-radius:10px;padding:12px 14px;font-weight:700;font-size:16px}
+.messaggio{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:616px;margin:0 auto;padding:14px 16px;border-radius:12px;background:#8a1c12;color:#fff;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:20}
 </style>
 </head>
 <body>
@@ -113,6 +118,7 @@
   <div class="ritiro">
     <label for="giorno">Giorno di ritiro</label>
     <select id="giorno"></select>
+    <p id="notaRitiro" class="nota-ritiro" role="status" hidden></p>
     <label for="ora">Orario</label>
     <select id="ora"></select>
     <label for="nome">Il tuo nome</label>
@@ -136,6 +142,7 @@
   <footer id="indirizzo">Pescheria da Massimo</footer>
 </main>
 
+<p id="messaggio" class="messaggio" role="alert" hidden></p>
 <div class="barra">
   <div class="tot"><span id="conteggio">0</span> articoli · <strong id="totale">0,00 €</strong></div>
   <button id="ordina" disabled>Ordina e ritira</button>
@@ -186,7 +193,60 @@ function festaChiusa(c){
  const now=new Date(),date=now.toLocaleDateString('sv-SE',{timeZone:'Europe/Rome'}),time=now.toLocaleTimeString('it-IT',{timeZone:'Europe/Rome',hour:'2-digit',minute:'2-digit',hour12:false});
  return date>c.scadenza_data||(date===c.scadenza_data&&time>(c.scadenza_ora||'00:00'));
 }
-const nonOrdinabile = v => {const c=menu?.categorie.find(c=>c.voci.some(x=>x.id===v.id));return (typeof v.stock_available==="number"&&v.stock_available<=0)||!v.disponibile||["esaurito","terminato"].includes(v.stato)||(c&&(!categoriaAttiva(c)||festaChiusa(c)||(c.id==="natale"&&!supportaFestivita)));};
+// ---- REGOLE DI RITIRO (le stesse del servizio ordini: il server resta il controllo finale) ----
+let giorniServizio=null; // giorni inviati dal servizio ordini; null finché non risponde
+function adesso(){const p=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Rome",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());const g=k=>p.find(x=>x.type===k).value;return {date:g("year")+"-"+g("month")+"-"+g("day"),time:g("hour")+":"+g("minute")};}
+const piuGiorni=(d,n)=>{const x=new Date(d+"T12:00:00Z");x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);};
+const categoriaDi=v=>menu?.categorie.find(c=>c.voci.some(x=>x.id===v.id));
+function giorniNormali(){const oggi=adesso().date;return Array.from({length:14},(_,i)=>piuGiorni(oggi,i)).filter(d=>new Date(d+"T12:00:00Z").getUTCDay()!==GIORNO_CHIUSO&&!(menu?.ritiro?.chiusure||[]).includes(d));}
+function giorniBase(){
+ if(giorniServizio)return giorniServizio;
+ const oggi=adesso().date,giorni=giorniNormali();
+ for(const c of menu?.categorie||[])if(c.id==="natale"&&categoriaAttiva(c)&&c.ritiro_data>=oggi&&!(menu.ritiro?.chiusure||[]).includes(c.ritiro_data))giorni.push(c.ritiro_data);
+ return [...new Set(giorni)].sort();
+}
+function termine(v,giorno){
+ const c=categoriaDi(v);
+ if(c?.id==="natale"&&(c.scadenza_data||c.scadenza_ora))return /^\d{4}-\d{2}-\d{2}$/.test(c.scadenza_data||"")&&/^([01]\d|2[0-3]):[0-5]\d$/.test(c.scadenza_ora||"")?{date:c.scadenza_data,time:c.scadenza_ora}:{date:"0000-00-00",time:"00:00"};
+ const regola=v.ordini_entro||c?.ordini_entro||menu?.ritiro?.ordini_entro;
+ if(!regola)return null;
+ const m=String(regola).trim().match(/^(\d{2}:\d{2}) del giorno (prima|stesso)$/i);
+ if(!m)return {date:"0000-00-00",time:"00:00"};
+ return {date:piuGiorni(giorno,m[2].toLowerCase()==="prima"?-1:0),time:m[1]};
+}
+function orariPer(voci,giorno){
+ const sera=voci.some(v=>v.su_ordinazione);
+ const lista=sera?(menu?.ritiro?.orari_sera||ORARI_SERA):ORARI,ora=adesso();
+ return giorno===ora.date?lista.filter(o=>o>ora.time):lista;
+}
+function giornoValido(v,giorno){
+ const c=categoriaDi(v),ora=adesso();
+ if(c?.id==="natale"&&c.ritiro_data&&giorno!==c.ritiro_data)return false;
+ if(c?.id!=="natale"&&!giorniNormali().includes(giorno))return false;
+ const t=termine(v,giorno);
+ if(t&&(ora.date>t.date||(ora.date===t.date&&ora.time>t.time)))return false;
+ return orariPer([v],giorno).length>0;
+}
+function giorniPer(voci){return giorniBase().filter(d=>voci.every(v=>giornoValido(v,d))&&orariPer(voci,d).length>0);}
+function motivoNonOrdinabile(v){
+ const c=categoriaDi(v);
+ if((typeof v.stock_available==="number"&&v.stock_available<=0)||!v.disponibile||["esaurito","terminato"].includes(v.stato))return "esaurito";
+ if(c&&(!categoriaAttiva(c)||festaChiusa(c)||(c.id==="natale"&&!supportaFestivita)))return "chiuso";
+ if(menu&&!giorniPer([v]).length)return "chiuso";
+ return "";
+}
+const nonOrdinabile = v => !!motivoNonOrdinabile(v);
+function avvisa(testo){const el=document.getElementById("messaggio");el.textContent=testo;el.hidden=false;clearTimeout(avvisa.timer);avvisa.timer=setTimeout(()=>{el.hidden=true;},7000);}
+// Un prodotto nuovo entra nel carrello solo se esiste un giorno di ritiro valido per tutto
+function compatibile(voce){
+ if(carrello[voce.id])return true;
+ const voci=[...Object.values(carrello).map(r=>r.voce),voce];
+ if(giorniPer(voci).length)return true;
+ const festa=voci.map(categoriaDi).find(c=>c?.id==="natale"&&c.ritiro_data);
+ avvisa(festa?"I piatti della festa si ritirano solo il "+etichettaGiorno(festa.ritiro_data)+". Per gli altri prodotti fai un ordine separato.":"Non c'è un giorno di ritiro valido per tutti questi prodotti insieme. Fai un ordine separato.");
+ return false;
+}
+function etichettaGiorno(d){const oggi=adesso().date,testo=new Date(d+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long"});return d===oggi?"Oggi, "+testo:d===piuGiorni(oggi,1)?"Domani, "+testo:testo.charAt(0).toUpperCase()+testo.slice(1);}
 const escapa = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 // Riga di tracciabilità: compare solo per i campi compilati
 function traccia(v) {
@@ -210,7 +270,7 @@ function cardHtml(v) {
   return `<div class="card${esaurito ? " esaurito" : ""}">
     ${foto}
     <div class="info">
-      <div class="nome"><span class="apri-carta" onclick="apriCarta('${v.id}')">${escapa(v.nome)}</span>${esaurito ? ' <span class="tag-esaurito">ESAURITO</span>' : ""}</div>
+      <div class="nome"><span class="apri-carta" onclick="apriCarta('${v.id}')">${escapa(v.nome)}</span>${esaurito ? ` <span class="tag-esaurito">${motivoNonOrdinabile(v)==="chiuso"?"PRENOTAZIONI CHIUSE":"ESAURITO"}</span>` : ""}</div>
       <div class="desc">${escapa(v.descrizione || "")}${v.su_ordinazione ? ` · <b>su ordinazione</b>` : ""}${v.ordini_entro ? ` · ordini entro ${v.ordini_entro}` : ""}${v.porzione ? ` · Porzione: ${v.porzione}` : ""}</div>
       <div class="prezzo">${fmt(v.prezzo)}${unita}</div>
       ${typeof v.stock_available==="number"?`<p>Disponibili da prenotare: <b>${escapa(v.stock_available)} ${escapa(v.unita||"porzioni")}</b></p>`:""}
@@ -237,8 +297,8 @@ function scelteVoce(v,q){
  ${v.consiglio?`<p class="consiglio"><b>Il consiglio di Massimo:</b> ${escapa(v.consiglio)}</p>`:""}
  </div>`;
 }
-function scegliPeso(id,q){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||(typeof voce.stock_available==="number"&&q>voce.stock_available))return;carrello[id]={voce,qta:q,preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||""};aggiornaOrari();render();}
-function scegliPreparazione(id,value){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||!voce.preparazioni?.includes(value))return;if(!carrello[id])carrello[id]={voce,qta:voce.unita==="kg"?.5:1};carrello[id].preparazione=value;aggiornaOrari();render();}
+function scegliPeso(id,q){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||(typeof voce.stock_available==="number"&&q>voce.stock_available)||!compatibile(voce))return;carrello[id]={voce,qta:q,preparazione:carrello[id]?.preparazione||voce.preparazioni?.[0]||""};aggiornaOrari();render();}
+function scegliPreparazione(id,value){const voce=tutte().find(v=>v.id===id);if(!voce||nonOrdinabile(voce)||!voce.preparazioni?.includes(value)||!compatibile(voce))return;if(!carrello[id])carrello[id]={voce,qta:voce.unita==="kg"?.5:1};carrello[id].preparazione=value;aggiornaOrari();render();}
 
 // Una categoria con periodo compare solo nelle date impostate; senza date resta nascosta
 function categoriaAttiva(c) {
@@ -254,7 +314,7 @@ function bannerFestivita(c){
  const [colore,simbolo]=Object.hasOwn(colori,c.ricorrenza)?colori[c.ricorrenza]:['#203a59','🐟'];
  const n=(c.voci||[]).filter(v=>v.disponibile&&v.stato!=='terminato').length;
  const data=d=>new Date(d+'T12:00:00Z').toLocaleDateString('it-IT',{timeZone:'Europe/Rome',day:'numeric',month:'long',year:'numeric'});
- return `<header class="banner-festa" style="background:${colore}" aria-label="Menu della festività"><span class="ricorrenza">${simbolo} ${escapa(c.ricorrenza||'Festività')}</span><h2>${escapa(c.nome)}</h2>${c.presentazione?`<p style="white-space:pre-wrap">${escapa(c.presentazione)}</p>`:''}${c.ritiro_data?`<p>Ritiro: <b>${escapa(data(c.ritiro_data))}</b></p>`:''}${c.scadenza_data?`<p>Prenotazioni entro il ${escapa(data(c.scadenza_data))} alle ${escapa(c.scadenza_ora)}.</p>`:''}${festaChiusa(c)?'<p><b>Prenotazioni chiuse</b></p>':!supportaFestivita?'<p>Prenotazioni della festività in preparazione.</p>':!n?'<p>Menu in preparazione.</p>':''}</header>`;
+ return `<header class="banner-festa" style="background:${colore}" aria-label="Menu della festività"><span class="ricorrenza">${simbolo} ${escapa(c.ricorrenza||'Festività')}</span><h2>${escapa(c.nome)}</h2>${c.presentazione?`<p style="white-space:pre-wrap">${escapa(c.presentazione)}</p>`:''}${c.ritiro_data?`<p>Ritiro: <b>${escapa(data(c.ritiro_data))}</b></p>`:''}${c.scadenza_data?`<p>Prenotazioni entro il ${escapa(data(c.scadenza_data))} alle ${escapa(c.scadenza_ora)}.</p>`:''}${festaChiusa(c)||(n&&c.voci.filter(v=>v.disponibile&&v.stato!=='terminato').every(v=>motivoNonOrdinabile(v)==="chiuso"))?'<p><b>Prenotazioni chiuse</b></p>':!supportaFestivita?'<p>Prenotazioni della festività in preparazione.</p>':!n?'<p>Menu in preparazione.</p>':''}</header>`;
 }
 
 function render() {
@@ -281,7 +341,7 @@ function render() {
 
 function cambia(id, delta) {
   const voce = tutte().find(v => v.id === id);
-  if (!voce || (delta > 0 && nonOrdinabile(voce))) return;
+  if (!voce || (delta > 0 && (nonOrdinabile(voce) || !compatibile(voce)))) return;
   const attuale = carrello[id] ? carrello[id].qta : 0;
   // kg: mezzo chilo per tocco; etto: un etto per tocco
   const passo = voce.unita === "kg" ? 0.5 : 1;
@@ -293,19 +353,29 @@ function cambia(id, delta) {
   render();
 }
 
-// Se nel carrello c'è la frittura su ordinazione, il ritiro è solo serale
+// Giorni e orari proposti: solo quelli che il servizio ordini accetterà per i prodotti scelti
 function aggiornaOrari() {
-  const festa=menu?.categorie.find(c=>c.id==='natale'&&c.ritiro_data&&c.voci.some(v=>carrello[v.id]));
-  if(festa){const day=document.getElementById('giorno');if(Array.from(day.options||[]).some(o=>o.value===festa.ritiro_data))day.value=festa.ritiro_data;}
-
-  const serve = Object.values(carrello).some(r => r.voce.su_ordinazione);
-  const serali = (menu && menu.ritiro && menu.ritiro.orari_sera) || ORARI_SERA;
-  const scelta = serve ? serali : ORARI;
-  const sel = document.getElementById("ora");
-  const prima = sel.value;
-  sel.innerHTML = scelta.map(o => `<option>${o}</option>`).join("");
-  if (scelta.includes(prima)) sel.value = prima;
+  if(!menu)return;
+  const voci=Object.values(carrello).map(r=>r.voce);
+  const giorni=voci.length?giorniPer(voci):giorniBase().filter(d=>tutte().some(v=>!nonOrdinabile(v)&&giornoValido(v,d)));
+  const selGiorno=document.getElementById("giorno"),prima=selGiorno.value;
+  selGiorno.innerHTML=giorni.length?giorni.map(d=>`<option value="${d}">${escapa(etichettaGiorno(d))}</option>`).join(""):'<option value="">Nessun giorno disponibile</option>';
+  const festa=voci.map(categoriaDi).find(c=>c?.id==="natale"&&c.ritiro_data);
+  selGiorno.value=festa&&giorni.includes(festa.ritiro_data)?festa.ritiro_data:giorni.includes(prima)?prima:(giorni[0]||"");
+  const nota=document.getElementById("notaRitiro");
+  if(voci.length&&prima&&selGiorno.value!==prima){nota.textContent="Giorno aggiornato: per i prodotti scelti il primo ritiro possibile è "+etichettaGiorno(selGiorno.value).toLowerCase()+".";nota.hidden=false;}
+  else if(!giorni.length&&voci.length){nota.textContent="Per i prodotti scelti non ci sono più giorni di ritiro prenotabili.";nota.hidden=false;}
+  else nota.hidden=true;
+  aggiornaOre();
 }
+function aggiornaOre(){
+  const voci=Object.values(carrello).map(r=>r.voce),giorno=document.getElementById("giorno").value;
+  const lista=giorno?orariPer(voci,giorno):[];
+  const sel=document.getElementById("ora"),prima=sel.value;
+  sel.innerHTML=lista.map(o=>`<option>${o}</option>`).join("");
+  sel.value=lista.includes(prima)?prima:(lista[0]||"");
+}
+document.getElementById("giorno").addEventListener("change",aggiornaOre);
 
 function totale() {
   return Object.values(carrello).reduce((s, r) => s + Math.round(Math.round(r.voce.prezzo * 100) * r.qta), 0) / 100;
@@ -316,20 +386,6 @@ function aggiornaTotali() {
   document.getElementById("conteggio").textContent = n;
   document.getElementById("totale").textContent = fmt(totale());
   document.getElementById("ordina").disabled = n === 0;
-}
-
-// ---- RITIRO ----
-function riempiRitiro() {
-  const giorni = [];
-  const oggi = new Date();
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(oggi); d.setDate(oggi.getDate() + i);
-    if (d.getDay() === GIORNO_CHIUSO) continue;
-    const nome = d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
-    giorni.push({date:d.toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"}),label:nome.charAt(0).toUpperCase() + nome.slice(1)});
-  }
-  document.getElementById("giorno").innerHTML = giorni.map(g => `<option value="${g.date}">${g.label}</option>`).join("");
-  document.getElementById("ora").innerHTML = ORARI.map(o => `<option>${o}</option>`).join("");
 }
 
 // ---- ORDINE ----
@@ -360,7 +416,7 @@ document.getElementById("ordina").addEventListener("click", () => {
   document.getElementById("inviaOrdine").disabled=!apiPronta;
   document.getElementById("inviaOrdine").hidden=false;
   document.getElementById("nuovoOrdine").hidden=true;
-  document.getElementById("invioStato").textContent=apiPronta?"Controlla i dati. L’ordine sarà registrato premendo Invia ordine.":"Invio automatico non disponibile. Puoi contattare la pescheria su WhatsApp.";
+  document.getElementById("invioStato").className="";document.getElementById("invioStato").textContent=apiPronta?"Controlla i dati. L’ordine sarà registrato premendo Invia ordine.":"Invio automatico non disponibile. Puoi contattare la pescheria su WhatsApp.";
   const t = testoOrdine();
   document.getElementById("testo").textContent = t;
   document.getElementById("linkWa").href = `https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(t)}`;
@@ -380,10 +436,7 @@ async function collegaOrdini(){
   const config=await response.json();
   if(!response.ok || !config.ok)throw new Error(config.errore||"Servizio non disponibile");
   menu=config.menu;supportaPreparazioni=config.preparations_supported===true;supportaFestivita=config.festivities_supported===true;
-  const sel=document.getElementById("giorno"),previous=sel.value;
-  sel.replaceChildren();
-  for(const date of config.days){const opt=document.createElement("option");opt.value=date;opt.textContent=new Date(date+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"long",day:"numeric",month:"long",year:"numeric"});sel.append(opt);}
-  if(config.days.includes(previous))sel.value=previous;
+  giorniServizio=Array.isArray(config.days)?config.days:null;
   apiPronta=true;aggiornaOrari();render();
   document.getElementById("invioStato").textContent="Invio automatico disponibile.";
   document.getElementById("inviaOrdine").disabled=false;
@@ -397,10 +450,12 @@ document.getElementById("inviaOrdine").addEventListener("click",async()=>{
  if(invioInCorso || riepilogoInviato || !apiPronta)return;
  const status=document.getElementById("invioStato"),button=document.getElementById("inviaOrdine");
  const name=document.getElementById("nome").value.trim(),phone=document.getElementById("cellulare").value.replace(/\s/g,"");
- if(!name || !/^\+?[0-9]{6,15}$/.test(phone)){status.textContent="Inserisci nome e un numero di cellulare valido prima di inviare.";return;}
+ const esito=t=>{status.className=t;};
+ if(!name || !/^\+?[0-9]{6,15}$/.test(phone)){status.textContent="Inserisci nome e un numero di cellulare valido prima di inviare.";esito("esito-errore");return;}
+ if(!document.getElementById("giorno").value||!document.getElementById("ora").value){status.textContent="Scegli un giorno e un orario di ritiro disponibili.";esito("esito-errore");return;}
  testoOrdine();
  const body={id:ultimoOrdine.codice,customer_name:name,customer_phone:phone,pickup_date:document.getElementById("giorno").value,pickup_time:document.getElementById("ora").value,notes:[document.getElementById("note").value.trim(),Object.values(carrello).filter(r=>r.voce.lotto_fornitore).map(r=>"Lotto "+r.voce.nome+": "+r.voce.lotto_fornitore).join("; "),!supportaPreparazioni?Object.values(carrello).filter(r=>r.preparazione).map(r=>r.voce.nome+": "+r.preparazione).join("; "):""].filter(Boolean).join("\n"),items:Object.values(carrello).map(r=>({id:r.voce.id,quantity:r.qta,...(supportaPreparazioni?{preparation:r.preparazione||""}:{})})).sort((a,b)=>a.id.localeCompare(b.id)),expected_total_cents:Object.values(carrello).reduce((sum,r)=>sum+Math.round(Math.round(r.voce.prezzo*100)*r.qta),0),website:document.getElementById("website").value};
- invioInCorso=true;button.disabled=true;document.getElementById("chiudi").disabled=true;status.textContent="Invio in corso…";
+ invioInCorso=true;button.disabled=true;document.getElementById("chiudi").disabled=true;status.textContent="Invio in corso…";esito("");
  try{
   const identity=JSON.stringify({...body,id:undefined});
   const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(identity));
@@ -411,9 +466,9 @@ document.getElementById("inviaOrdine").addEventListener("click",async()=>{
   const data=await response.json();
   if(!response.ok || !data.ok)throw new Error(data.errore||"Ordine non registrato");
   riepilogoInviato=true;button.hidden=true;document.getElementById("nuovoOrdine").hidden=false;
-  status.textContent="Ordine ricevuto! Codice: "+data.id+". Totale indicativo: "+fmt(data.total_cents/100)+". In attesa di conferma della pescheria. Non occorre inviarlo anche su WhatsApp.";
+  esito("esito-ok");status.textContent="Ordine ricevuto! Codice: "+data.id+". Totale indicativo: "+fmt(data.total_cents/100)+". In attesa di conferma della pescheria. Non occorre inviarlo anche su WhatsApp.";
   const text=testoOrdine();document.getElementById("testo").textContent=text;document.getElementById("linkWa").href=`https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(text)}`;
- }catch(e){status.textContent=(e.name==="TimeoutError"||e.name==="TypeError")?"Non abbiamo ricevuto la conferma. Premi di nuovo Invia ordine senza modificare i dati: lo stesso codice evita duplicati.":e.message;button.disabled=false;}
+ }catch(e){esito("esito-errore");const perso=e.name==="TimeoutError"||e.name==="TypeError";if(!perso)collegaOrdini();status.textContent=perso?"Non abbiamo ricevuto la conferma. Premi di nuovo Invia ordine senza modificare i dati: lo stesso codice evita duplicati.":e.message;button.disabled=false;}
  finally{invioInCorso=false;document.getElementById("chiudi").disabled=false;}
 });
 document.getElementById("nuovoOrdine").addEventListener("click",()=>{
@@ -464,7 +519,6 @@ function aggiungiDaCarta(id) { cambia(id, 1); chiudiCarta(); }
 // ---- AVVIO ----
 // Chiude eventuali riquadri rimasti aperti (scheda pesce, riepilogo): evita il velo blu
 document.querySelectorAll(".modale").forEach(m => m.classList.remove("aperta"));
-riempiRitiro();
 fetch("menu.json", { cache: "no-store" })
   .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then(data => {
