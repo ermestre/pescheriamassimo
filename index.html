@@ -504,6 +504,18 @@ function disegnaCarrello(){
 function aggiornaRiepilogo(){if(riepilogoInviato||!menu)return;const t=testoOrdine();document.getElementById("testo").textContent=t;document.getElementById("linkWa").href=`https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(t)}`;}
 function chiudiCassa(){document.getElementById("modale").classList.remove("aperta");}
 const codiceCorto=id=>String(id||"").replace(/-/g,"").slice(0,6).toUpperCase();
+// Il numero serve a Massimo per confermare su WhatsApp: un cellulare italiano ha 10 cifre e inizia con 3.
+function controllaCellulare(p){
+  const n=String(p||"");
+  if(!n)return "Scrivi il tuo numero di cellulare: Massimo ti conferma l'ordine su WhatsApp.";
+  if(!/^\+?[0-9]+$/.test(n))return "Il cellulare può contenere solo numeri (e il + iniziale per i numeri esteri).";
+  const italiano=n.replace(/^(\+39|0039)/,"");
+  if(/^(\+|00)/.test(n)&&!/^(\+39|0039)/.test(n))return /^(\+|00)[0-9]{8,15}$/.test(n)?"":"Controlla il numero estero: prefisso e numero completo.";
+  if(/^0/.test(italiano))return "Serve un numero di cellulare, non il fisso: Massimo ti conferma l'ordine su WhatsApp.";
+  if(!/^3/.test(italiano))return "Controlla il cellulare: i numeri italiani iniziano con 3.";
+  if(italiano.length!==10)return "Il cellulare ha "+italiano.length+" cifre: i cellulari italiani ne hanno 10. Controlla di averlo scritto tutto.";
+  return "";
+}
 function datiRicordati(){try{return JSON.parse(localStorage.getItem("pm_cliente")||"null");}catch{return null;}}
 function ricordaDati(nome,cellulare){try{if(document.getElementById("ricorda").checked)localStorage.setItem("pm_cliente",JSON.stringify({nome,cellulare}));else localStorage.removeItem("pm_cliente");}catch{}}
 for(const id of ["nome","cellulare","note"])document.getElementById(id).addEventListener("input",aggiornaRiepilogo);
@@ -573,9 +585,10 @@ async function collegaOrdini(){
 document.getElementById("inviaOrdine").addEventListener("click",async()=>{
  if(invioInCorso || riepilogoInviato || !apiPronta)return;
  const status=document.getElementById("invioStato"),button=document.getElementById("inviaOrdine");
- const name=document.getElementById("nome").value.trim(),phone=document.getElementById("cellulare").value.replace(/\s/g,"");
+ const name=document.getElementById("nome").value.trim(),phone=document.getElementById("cellulare").value.replace(/[\s.\-\/()]/g,"");
  const esito=t=>{status.className=t;};
- if(!name || !/^\+?[0-9]{6,15}$/.test(phone)){status.textContent="Inserisci nome e un numero di cellulare valido prima di inviare.";esito("esito-errore");return;}
+ if(!name){status.textContent="Scrivi il tuo nome prima di inviare.";esito("esito-errore");return;}
+ const problemaCell=controllaCellulare(phone);if(problemaCell){status.textContent=problemaCell;esito("esito-errore");document.getElementById("cellulare").focus?.();return;}
  if(!document.getElementById("giorno").value||!document.getElementById("ora").value){status.textContent="Scegli un giorno e un orario di ritiro disponibili.";esito("esito-errore");return;}
  testoOrdine();
  const body={id:ultimoOrdine.codice,customer_name:name,customer_phone:phone,pickup_date:document.getElementById("giorno").value,pickup_time:document.getElementById("ora").value,notes:[document.getElementById("note").value.trim(),Object.values(carrello).filter(r=>r.voce.lotto_fornitore).map(r=>"Lotto "+r.voce.nome+": "+r.voce.lotto_fornitore).join("; "),!supportaPreparazioni?Object.values(carrello).filter(r=>r.preparazione).map(r=>r.voce.nome+": "+r.preparazione).join("; "):""].filter(Boolean).join("\n"),items:Object.values(carrello).map(r=>({id:r.voce.id,quantity:r.qta,...(supportaPreparazioni?{preparation:r.preparazione||""}:{})})).sort((a,b)=>a.id.localeCompare(b.id)),expected_total_cents:Object.values(carrello).reduce((sum,r)=>sum+Math.round(Math.round(r.voce.prezzo*100)*r.qta),0),website:document.getElementById("website").value};
