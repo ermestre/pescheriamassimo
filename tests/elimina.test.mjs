@@ -36,4 +36,15 @@ assert.ok(sqlite.prepare("SELECT 1 FROM orders WHERE id='a'").get());
 // Il pannello mostra il pulsante solo per gli annullati.
 const html=await (await worker.fetch(new Request('https://worker.test/'),env)).text();
 assert.match(html,/if\(o\.status==="cancelled"\)\{\s*const del=element\("button","Elimina ordine"\)/);
-console.log('OK: eliminazione solo per ordini annullati, movimenti rimossi, revisione aggiornata, chiave obbligatoria');
+// Azzera tutto: solo in modalità prova e con la parola AZZERA.
+add('c','new');add('d','confirmed');
+const resetCall=body=>worker.fetch(new Request('https://worker.test/api/reset',{method:'POST',headers:auth,body:JSON.stringify(body)}),env);
+menu.modalita_prova=false;
+let rr=await resetCall({conferma:'AZZERA'});assert.equal(rr.status,403,'modalità prova spenta: niente azzeramento');assert.ok(sqlite.prepare('SELECT count(*) n FROM orders').get().n>=3);
+menu.modalita_prova=true;
+assert.equal((await resetCall({conferma:'azzera?'})).status,400,'serve la parola esatta');
+assert.equal((await worker.fetch(new Request('https://worker.test/api/reset',{method:'POST',body:JSON.stringify({conferma:'AZZERA'})}),env)).status,401,'serve la chiave');
+rr=await resetCall({conferma:'AZZERA'});assert.equal(rr.status,200);
+for(const t of ['orders','payment_events','stock_reservations','stock_moves','inventory'])assert.equal(sqlite.prepare(`SELECT count(*) n FROM ${t}`).get().n,0,t+' vuota');
+const html2=await (await worker.fetch(new Request('https://worker.test/'),env)).text();assert.match(html2,/id="provaBox" hidden/);
+console.log('OK: eliminazione solo per ordini annullati, azzeramento solo in modalità prova, movimenti rimossi, revisione aggiornata, chiave obbligatoria');
