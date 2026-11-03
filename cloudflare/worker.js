@@ -307,6 +307,16 @@ async function handle(request,env,url){
   if(!env.db) return json({errore:"Database non collegato"},503);
   try{
    await ensureSchema(env.db);
+   // Azzeramento per le prove: solo con menu.modalita_prova attiva e la parola AZZERA.
+   if(url.pathname==="/api/reset" && request.method==="POST"){
+    const raw=await request.text();let b;try{b=JSON.parse(raw);}catch{return json({errore:"Richiesta non valida"},400);}
+    if(b?.conferma!=="AZZERA")return json({errore:"Scrivi AZZERA per confermare"},400);
+    const menu=await readMenu();
+    if(menu.modalita_prova!==true)return json({errore:"Modalità prova spenta: gli ordini veri non si possono azzerare. Accendila dalla gestione se state ancora provando."},403);
+    const counts=await env.db.prepare("SELECT (SELECT count(*) FROM orders) AS ordini").first();
+    await env.db.batch(["DELETE FROM payment_events","DELETE FROM stock_reservations","DELETE FROM stock_moves","DELETE FROM inventory","DELETE FROM orders"].map(sql=>env.db.prepare(sql)));
+    return json({ok:true,ordini:counts?.ordini||0});
+   }
    if(url.pathname==="/api/changes" && request.method==="GET"){
     const row=await env.db.prepare("SELECT value FROM app_meta WHERE key='rev'").first();
     return json({rev:row?row.value:0});
@@ -437,6 +447,8 @@ main{max-width:960px;margin:0 auto;padding:16px}
 .azioni .wa{background:var(--wa)}
 .azioni .verso-ready{background:var(--pronto)}
 .azioni .verso-collected{background:var(--inchiostro)}
+.elimina-tutto{background:var(--annullato)}
+#provaBox{border-color:var(--annullato)}
 .azioni .elimina{background:#fff;color:var(--annullato);border:1.5px solid var(--annullato)}
 .azioni .stato{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:15px;color:var(--tenue)}
 .azioni small{flex-basis:100%;color:var(--tenue)}
@@ -480,6 +492,7 @@ details button{margin:4px 6px 4px 0}
 <details><summary>Suono degli avvisi</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button" class="secondario">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details>
 <details><summary>Disponibilità e vendite al banco</summary><button id="stockLoad" type="button">Aggiorna disponibilità</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Consiglio: inserisci la quantità che vuoi riservare agli ordini online (es. 5 kg di spigola), così non serve scalare le vendite al banco. Togli il limite quando non serve più. Le quantità sono condivise da tutti i giorni di ritiro. Aggiungi solo il pesce libero da prenotazioni già esistenti. Gli ordini precedenti all’attivazione non vengono scalati. Ogni nuovo ordine prenota subito la quantità; Annullato la restituisce. Ritirato resta scalato. Registra le vendite al banco per mantenere corretto il residuo. I prodotti senza carico restano senza limite.</p></details>
 <details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" class="secondario" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details>
+<details id="provaBox" hidden><summary>Prove: azzera tutto</summary><p>Modalità prova accesa. Cancella <b>tutti</b> gli ordini, gli incassi e le quantità, per ricominciare da zero. Si usa solo durante le prove: quando partite sul serio, spegnete la modalità prova dalla gestione e questo tasto sparisce.</p><button id="resetAll" type="button" class="elimina-tutto">Azzera tutto</button><p id="resetMsg" role="status"></p></details>
 <div class="uscita"><p id="sessionStatus"></p><button id="logout" class="secondario">Esci</button></div>
 </section>
 </section>
@@ -501,6 +514,7 @@ function startLogin(key,remember){
  if(loginBusy)return;
  loginBusy=true;const generation=++authGeneration;$("loginButton").disabled=true;
  token=key;rememberWanted=remember;accessSaved=false;$("view").value="open";$("day").value="";
+ fetch("/api/config",{cache:"no-store"}).then(r=>r.json()).then(c=>{$("provaBox").hidden=c?.menu?.modalita_prova!==true;}).catch(()=>{});
  return load().then(checkOrders).finally(()=>{if(generation===authGeneration||!token){loginBusy=false;$("loginButton").disabled=false;}});
 }
 
@@ -834,6 +848,13 @@ async function checkOrders(){
 setInterval(checkOrders,30000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkOrders();});
 
+$("resetAll").onclick=async()=>{
+ const parola=prompt("Per cancellare TUTTI gli ordini, gli incassi e le quantità scrivi AZZERA");
+ if(parola===null)return;if(parola.trim().toUpperCase()!=="AZZERA"){$("resetMsg").textContent="Niente cancellato: la parola non era AZZERA.";return;}
+ $("resetAll").disabled=true;mutations++;
+ try{const r=await api("/api/reset",{method:"POST",body:JSON.stringify({conferma:"AZZERA"})});seenOrders.clear();ordersBaseline=false;lastRev=null;$("newOrders").hidden=true;$("stockProducts").replaceChildren();$("reportOutput").replaceChildren();$("resetMsg").textContent="Fatto: "+r.ordini+" ordini cancellati. Si riparte da zero.";await load();}
+ catch(e){$("resetMsg").textContent=e.message;}finally{mutations--;$("resetAll").disabled=false;}
+};
 $("login").onsubmit=e=>{e.preventDefault();startLogin($("key").value,$("rememberAccess").checked);};
 $("refresh").onclick=load;$("day").onchange=load;$("view").onchange=load;$("clearDay").onclick=()=>{$("day").value="";load();};$("logout").onclick=()=>{const cleared=exit();$("msg").textContent=cleared?"Accesso chiuso e chiave salvata rimossa da questo browser.":"Accesso chiuso. Il browser non consente di cancellare la chiave salvata: cancella i dati di questo sito nelle impostazioni del browser.";};
 try{

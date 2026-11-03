@@ -615,7 +615,9 @@ function ritiroHtml(){
  <div class="riga-termine"><input type="date" id="nuovaChiusura"><button type="button" class="secondario" onclick="aggiungiChiusura()">Aggiungi</button></div>
  <div class="scelte">${(r.chiusure||[]).map(d=>`<button type="button" class="scelta" aria-pressed="true" onclick="togliChiusura('${esc(d)}')">${esc(new Date(d+"T12:00:00Z").toLocaleDateString("it-IT",{timeZone:"Europe/Rome",weekday:"short",day:"numeric",month:"short"}))} ✕</button>`).join("")||'<p class="piccolo">Nessuna chiusura straordinaria. Il lunedì è sempre chiuso.</p>'}</div>
  <label class="check"><input type="checkbox" ${r.attivo===false?"":"checked"} onchange="dati.ritiro.attivo=this.checked;segna()"> Ordini online attivi</label>
- <p class="piccolo">Togli la spunta per sospendere temporaneamente gli ordini (per esempio per ferie).</p>`;
+ <p class="piccolo">Togli la spunta per sospendere temporaneamente gli ordini (per esempio per ferie).</p>
+ <label class="check"><input type="checkbox" ${dati.modalita_prova===true?"checked":""} onchange="dati.modalita_prova=this.checked;segna();ridisegnaRitiro()"> Modalità prova</label>
+ <p class="piccolo">${dati.modalita_prova===true?"<b>Accesa:</b> nel pannello ordini c'è \"Azzera tutto\" per cancellare gli ordini di prova. I clienti non vedono niente. Spegnila quando partite sul serio, poi premi Salva.":"Spenta: gli ordini sono veri e non si possono azzerare. Accendila solo per fare prove con Massimo."}</p>`;
 }
 function ridisegnaRitiro(){$("ritiroOpzioni").innerHTML=ritiroHtml();$("aperturaOpzioni").innerHTML=aperturaHtml();}
 function aggiornaTermineGenerale(){dati.ritiro ||= {};dati.ritiro.ordini_entro=$("termineOra").value+" del giorno "+$("termineGiorno").value;segna();}
