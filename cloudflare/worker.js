@@ -170,6 +170,11 @@ async function stockApi(request,env,url){
  if(url.pathname==='/api/stock'&&request.method==='POST'){
   const raw=await request.text();if(raw.length>2000)return json({errore:'Richiesta troppo grande'},413);
   let b;try{b=JSON.parse(raw);}catch{return json({errore:'Dati non validi'},400);}
+  // Torna senza limite: tolte quantità e prenotazioni del prodotto, gli ordini restano intatti.
+  if(b&&b.kind==='unlimited'&&typeof b.product_id==='string'&&b.product_id.length<=100){
+   await env.db.batch([env.db.prepare('DELETE FROM stock_reservations WHERE product_id=?').bind(b.product_id),env.db.prepare('DELETE FROM inventory WHERE product_id=?').bind(b.product_id)]);
+   return json({ok:true});
+  }
   if(!b||!isUuid(b.id)||typeof b.product_id!=='string'||!Number.isSafeInteger(b.units)||b.units<=0||b.units>100000000||!['arrival','counter'].includes(b.kind))return json({errore:'Movimento di magazzino non valido'},400);
   const delta=b.kind==='counter'?-b.units:b.units;
   const prior=await env.db.prepare('SELECT * FROM stock_moves WHERE id=?').bind(b.id).first();
@@ -458,7 +463,7 @@ details button{margin:4px 6px 4px 0}
 <div id="orders"></div>
 <section class="strumenti"><h2>Altri strumenti</h2>
 <details><summary>Suono degli avvisi</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button" class="secondario">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details>
-<details><summary>Disponibilità e vendite al banco</summary><button id="stockLoad" type="button">Aggiorna disponibilità</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Le quantità sono condivise da tutti i giorni di ritiro. Aggiungi solo il pesce libero da prenotazioni già esistenti. Gli ordini precedenti all’attivazione non vengono scalati. Ogni nuovo ordine prenota subito la quantità; Annullato la restituisce. Ritirato resta scalato. Registra le vendite al banco per mantenere corretto il residuo. I prodotti senza carico restano senza limite.</p></details>
+<details><summary>Disponibilità e vendite al banco</summary><button id="stockLoad" type="button">Aggiorna disponibilità</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Consiglio: inserisci la quantità che vuoi riservare agli ordini online (es. 5 kg di spigola), così non serve scalare le vendite al banco. Togli il limite quando non serve più. Le quantità sono condivise da tutti i giorni di ritiro. Aggiungi solo il pesce libero da prenotazioni già esistenti. Gli ordini precedenti all’attivazione non vengono scalati. Ogni nuovo ordine prenota subito la quantità; Annullato la restituisce. Ritirato resta scalato. Registra le vendite al banco per mantenere corretto il residuo. I prodotti senza carico restano senza limite.</p></details>
 <details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" class="secondario" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details>
 <div class="uscita"><p id="sessionStatus"></p><button id="logout" class="secondario">Esci</button></div>
 </section>
@@ -651,14 +656,16 @@ $("stockLoad").onclick=async()=>{
   for(const p of data.products){
    const row=element('article','');row.append(element('h3',p.name),element('p',p.managed?'Disponibile da vendere: '+p.available+' '+p.unit+' · Prenotato da preparare: '+p.reserved+' '+p.unit:'Quantità senza limite: nessun carico registrato.'));
    const form=element('form',''),qty=element('input','');qty.type='number';qty.min=p.unit==='kg'?'0.001':'1';qty.step=p.unit==='kg'?'0.001':'1';qty.required=true;qty.setAttribute('aria-label','Quantità in '+p.unit);qty.placeholder='Quantità in '+p.unit;
-   const kind=element('select','');for(const [value,label] of [['arrival','Aggiungi arrivo disponibile'],['counter','Scala vendita al banco']]){const opt=element('option',label);opt.value=value;kind.append(opt);}
+   const kind=element('select','');for(const [value,label] of [['arrival','Aggiungi quantità disponibile'],['counter','Scala vendita al banco']]){const opt=element('option',label);opt.value=value;kind.append(opt);}
    const button=element('button','Registra movimento');form.append(qty,kind,button);let id='',signature='';
    form.onsubmit=async e=>{
     e.preventDefault();const units=Math.round(Number(qty.value)*1000);const next=p.id+':'+kind.value+':'+units;if(next!==signature){id=crypto.randomUUID();signature=next;}
     if(!confirm((kind.value==='arrival'?'Aggiungere ':'Scalare ')+qty.value+' '+p.unit+' per '+p.name+'?'))return;
     mutations++;button.disabled=true;
     try{await api('/api/stock',{method:'POST',body:JSON.stringify({id,product_id:p.id,units,kind:kind.value})});await $("stockLoad").onclick();}catch(e){$("stockMsg").textContent=e.message;button.disabled=false;}finally{mutations--;}
-   };row.append(form);$("stockProducts").append(row);
+   };row.append(form);
+   if(p.managed){const free=element('button','Togli il limite');free.type='button';free.className='secondario';free.onclick=async()=>{if(!confirm('Togliere il limite a '+p.name+'? Torna ordinabile senza quantità massima. Gli ordini già ricevuti restano.'))return;mutations++;free.disabled=true;try{await api('/api/stock',{method:'POST',body:JSON.stringify({product_id:p.id,kind:'unlimited'})});await $("stockLoad").onclick();}catch(e){$("stockMsg").textContent=e.message;free.disabled=false;}finally{mutations--;}};row.append(free);}
+   $("stockProducts").append(row);
   }
   $("stockMsg").textContent="Disponibilità aggiornate. Le quantità già prenotate sono escluse dal disponibile.";
  }catch(e){$("stockMsg").textContent=e.message;}finally{$("stockLoad").disabled=false;}

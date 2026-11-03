@@ -26,4 +26,14 @@ config=await(await call('/api/config')).json();assert.equal(config.menu.categori
 // Orders from before stock activation never manufacture returned stock on cancellation.
 sqlite.prepare("INSERT INTO orders(id,status,items_json) VALUES ('legacy','new','[]')").run();await call('/api/orders/legacy',{status:'cancelled'},true,'PATCH');assert.equal(balance('spigola'),2000);
 const stock=await(await call('/api/stock',null,true)).json();assert.equal(stock.products.find(p=>p.id==='spigola').available,2);
+// Togli il limite: il prodotto torna senza quantità massima e gli ordini già presenti non cambiano.
+const ordersBefore=sqlite.prepare('SELECT count(*) n FROM orders').get().n;
+assert.equal((await call('/api/stock',{product_id:'spigola',kind:'unlimited'},true)).status,200);
+assert.equal(balance('spigola'),undefined);assert.equal(sqlite.prepare("SELECT count(*) n FROM stock_reservations WHERE product_id='spigola'").get().n,0);
+assert.equal(sqlite.prepare('SELECT count(*) n FROM orders').get().n,ordersBefore);
+const free=await(await call('/api/stock',null,true)).json();assert.equal(free.products.find(p=>p.id==='spigola').managed,false);
+const cfg=await(await call('/api/config')).json();assert.equal(cfg.menu.categorie.flatMap(c=>c.voci).find(v=>v.id==='spigola').stock_available,undefined);
+const big={...order,id:crypto.randomUUID(),items:[{id:'spigola',quantity:20,preparation:'Intero'}],expected_total_cents:48000};assert.equal((await call('/api/submit',big)).status,201,'senza limite si ordina qualsiasi quantità consentita');
+assert.equal((await call('/api/orders/'+order.id,{status:'new'},true,'PATCH')).status,200,'riattivare un ordine vecchio non è bloccato');
+assert.equal((await call('/api/stock',{product_id:'spigola',kind:'unlimited'})).status,401,'serve la chiave');
 globalThis.fetch=old;sqlite.close();console.log('OK: magazzino atomico, carichi e banco idempotenti, quantità insufficienti senza ordini parziali, annullo, riattivazione, ritirato e storico preesistente');
