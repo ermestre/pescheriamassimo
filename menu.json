@@ -105,7 +105,8 @@
                 "allergeni": ""
               }
             }
-          ]
+          ],
+          "stato": "disponibile"
         },
         {
           "id": "orata",
