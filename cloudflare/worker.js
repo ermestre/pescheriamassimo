@@ -47,8 +47,10 @@ function basicOrder(body){
  const string=(key,min,max)=>{if(typeof body[key]!=='string')fail('Compila '+key);const v=body[key].trim();if(v.length<min||v.length>max)fail('Controlla '+key);return v;};
  const id=string('id',36,36);
  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))fail('Codice ordine non valido');
- const name=string('customer_name',1,100),phone=string('customer_phone',6,30).replace(/\s/g,'');
+ const name=string('customer_name',1,100),phone=string('customer_phone',6,30).replace(/[\s.\-\/()]/g,'');
  if(!/^\+?[0-9]{6,15}$/.test(phone))fail('Controlla il numero di cellulare');
+ // Serve un cellulare raggiungibile su WhatsApp: italiano di 10 cifre che inizia con 3, oppure estero con prefisso.
+ {const it=phone.replace(/^(\+39|0039)/,'');if(!(/^(\+|00)/.test(phone)&&!/^(\+39|0039)/.test(phone))&&!/^3[0-9]{9}$/.test(it))fail(/^0/.test(it)?'Serve un numero di cellulare, non il fisso.':'Il cellulare deve avere 10 cifre e iniziare con 3. Controlla di averlo scritto tutto.');}
  const date=string('pickup_date',10,10),time=string('pickup_time',5,5),notes=string('notes',0,2000);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(time))fail('Ritiro non valido');
  if(!Array.isArray(body.items)||body.items.length<1||body.items.length>40)fail('Carrello non valido');
