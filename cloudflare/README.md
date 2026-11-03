@@ -198,3 +198,10 @@ Verifica: node tests/gestione.test.cjs; prova in Chromium a 390 px. Nessuna modi
 - Gestione: nella scheda del prodotto le preparazioni tipiche per tipo (pesce intero, pesce da tranci, crostacei, cefalopodi; nessuna per bivalvi, baccalà e prodotti pronti) con il pulsante "Attiva le suggerite". Non si attivano mai da sole.
 - Pannello: dopo "Conferma su WhatsApp" la scheda diventa subito Confermato e compare "Segna come pronto".
 - Prova completa in Chromium con worker.js e pagine reali in locale: ogni prodotto in vendita con ogni preparazione ordinato dal sito e ritrovato nel pannello con codice corto e preparazione; carrello misto con orari serali; dati ricordati; conferma WhatsApp, pronto, incasso, ritirato, resoconto, CSV, annulla ed elimina; prezzo ed Esaurito dalla gestione visti dal sito e accettati dal servizio; nuovo prodotto non in vendita invisibile. 69 controlli superati, nessun errore JavaScript.
+
+## Quantità dalla gestione del menu (3 novembre 2026)
+
+- Worker: POST /api/stock con kind "set" imposta la quantità assoluta in un'unica operazione (la differenza è calcolata nel database, senza perdere ordini arrivati nel frattempo); "unlimited" toglie il limite. Le richieste a /api/stock da https://ermestre.github.io ricevono le intestazioni CORS (preflight compreso); serve sempre la chiave ADMIN_TOKEN. Ordini, incassi e resoconti restano accessibili solo dal pannello.
+- Gestione: nella scheda di ogni prodotto la sezione "Quantità disponibile" (Imposta, Togli il limite, disponibile e prenotato) e nella riga l'etichetta "N kg disponibili". La chiave del pannello si inserisce una volta e resta su quel telefono (pm_ordini_key); se non è valida viene tolta e richiesta di nuovo. Le quantità si salvano subito su Cloudflare, indipendentemente da Salva modifiche.
+
+Verifica: tests/stock.test.mjs (set, idempotenza, zero, CORS, preflight, ordini non esposti); prova nel browser: 10 kg impostati dalla gestione, ordine di 1 kg dal sito, 9 kg nel sito e nella gestione; prova completa 69/69.

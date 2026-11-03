@@ -175,19 +175,22 @@ async function stockApi(request,env,url){
    await env.db.batch([env.db.prepare('DELETE FROM stock_reservations WHERE product_id=?').bind(b.product_id),env.db.prepare('DELETE FROM inventory WHERE product_id=?').bind(b.product_id)]);
    return json({ok:true});
   }
-  if(!b||!isUuid(b.id)||typeof b.product_id!=='string'||!Number.isSafeInteger(b.units)||b.units<=0||b.units>100000000||!['arrival','counter'].includes(b.kind))return json({errore:'Movimento di magazzino non valido'},400);
+  if(!b||!isUuid(b.id)||typeof b.product_id!=='string'||!Number.isSafeInteger(b.units)||b.units<(b.kind==='set'?0:1)||b.units>100000000||!['arrival','counter','set'].includes(b.kind))return json({errore:'Movimento di magazzino non valido'},400);
   const delta=b.kind==='counter'?-b.units:b.units;
   const prior=await env.db.prepare('SELECT * FROM stock_moves WHERE id=?').bind(b.id).first();
-  if(prior)return prior.product_id===b.product_id&&prior.delta===delta&&prior.kind===b.kind?json({ok:true}):json({errore:'Codice movimento già usato'},409);
+  if(prior)return prior.product_id===b.product_id&&prior.kind===b.kind&&(b.kind==='set'||prior.delta===delta)?json({ok:true}):json({errore:'Codice movimento già usato'},409);
   const menu=await readMenu(),v=menu.categorie.flatMap(c=>c.voci).find(v=>v.id===b.product_id);
-  if(!v)return json({errore:'Prodotto non trovato nel menu'},404);
+  if(!v)return json({errore:'Prodotto non ancora nel menu pubblicato: salva il menu e riprova fra qualche minuto'},404);
   if(v.unita!=='kg'&&b.units%1000!==0)return json({errore:'Per questo prodotto inserisci un numero intero di pezzi o porzioni'},400);
   await env.db.batch([
    env.db.prepare('INSERT OR IGNORE INTO inventory(product_id,units) VALUES (?,0)').bind(b.product_id),
-   env.db.prepare('INSERT OR IGNORE INTO stock_moves(id,product_id,delta,kind,created_at) VALUES (?,?,?,?,?)').bind(b.id,b.product_id,delta,b.kind,new Date().toISOString())
+   b.kind==='set'
+    // Quantità assoluta: la differenza si calcola nella stessa operazione, senza perdere ordini arrivati nel frattempo.
+    ?env.db.prepare('INSERT OR IGNORE INTO stock_moves(id,product_id,delta,kind,created_at) SELECT ?,?,?-units,?,? FROM inventory WHERE product_id=?').bind(b.id,b.product_id,b.units,b.kind,new Date().toISOString(),b.product_id)
+    :env.db.prepare('INSERT OR IGNORE INTO stock_moves(id,product_id,delta,kind,created_at) VALUES (?,?,?,?,?)').bind(b.id,b.product_id,delta,b.kind,new Date().toISOString())
   ]);
   const saved=await env.db.prepare('SELECT * FROM stock_moves WHERE id=?').bind(b.id).first();
-  if(!saved||saved.product_id!==b.product_id||saved.delta!==delta||saved.kind!==b.kind)return json({errore:'Movimento in conflitto'},409);
+  if(!saved||saved.product_id!==b.product_id||(b.kind!=='set'&&saved.delta!==delta)||saved.kind!==b.kind)return json({errore:'Movimento in conflitto'},409);
   return json({ok:true});
  }
  return json({errore:'Operazione magazzino non disponibile'},404);
@@ -279,9 +282,19 @@ async function paymentApi(request,env,url){
 }
 function isUuid(s){return typeof s==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(s);}
 
+// La gestione del menu (GitHub Pages) può leggere e impostare le quantità: serve sempre la chiave del pannello.
 export default {
  async fetch(request,env){
   const url=new URL(request.url);
+  const gestione=url.pathname==='/api/stock'&&request.headers.get('Origin')===CLIENT_ORIGIN;
+  if(gestione&&request.method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':CLIENT_ORIGIN,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Max-Age':'600','Vary':'Origin'}});
+  const response=await handle(request,env,url);
+  if(gestione){response.headers.set('Access-Control-Allow-Origin',CLIENT_ORIGIN);response.headers.set('Vary','Origin');}
+  return response;
+ }
+};
+async function handle(request,env,url){
+ {
   if(["/api/config","/api/submit"].includes(url.pathname))return publicApi(request,env);
   if(request.method==="GET" && (url.pathname==="/" || url.pathname==="/admin")){
    return new Response(PAGE,{headers:{...HEADERS,"Content-Type":"text/html; charset=utf-8",
@@ -348,7 +361,7 @@ export default {
    return json({errore:"Operazione non disponibile"},404);
   }catch(e){if(stockFailure(e))return json({errore:"Quantità insufficiente. Aggiorna le disponibilità: nessuna modifica è stata salvata."},409);return json({errore:"Impossibile leggere o aggiornare l’archivio. Riprova."},503);}
  }
-};
+}
 const PAGE = `<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1b2f4e">
 <title>Ordini · Pescheria Massimo</title><link rel="icon" type="image/png" href="https://ermestre.github.io/pescheriamassimo/img/icona-64.png">
 <style>

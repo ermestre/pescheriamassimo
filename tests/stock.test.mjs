@@ -36,4 +36,18 @@ const cfg=await(await call('/api/config')).json();assert.equal(cfg.menu.categori
 const big={...order,id:crypto.randomUUID(),items:[{id:'spigola',quantity:20,preparation:'Intero'}],expected_total_cents:48000};assert.equal((await call('/api/submit',big)).status,201,'senza limite si ordina qualsiasi quantità consentita');
 assert.equal((await call('/api/orders/'+order.id,{status:'new'},true,'PATCH')).status,200,'riattivare un ordine vecchio non è bloccato');
 assert.equal((await call('/api/stock',{product_id:'spigola',kind:'unlimited'})).status,401,'serve la chiave');
+// Quantità assoluta dalla gestione: 10 kg, un ordine di 1 kg, poi si reimposta a 4 kg tenendo conto del prenotato.
+let r=await call('/api/stock',{id:crypto.randomUUID(),product_id:'orata',units:10000,kind:'set'},true);assert.equal(r.status,200);
+assert.equal(r.headers.get('Access-Control-Allow-Origin'),'https://ermestre.github.io','la gestione legge la risposta');
+assert.equal(balance('orata'),10000);
+const setOrder={...order,id:crypto.randomUUID(),items:[{id:'orata',quantity:1,preparation:'Intero'}],expected_total_cents:2400};assert.equal((await call('/api/submit',setOrder)).status,201);assert.equal(balance('orata'),9000);
+const setId=crypto.randomUUID();assert.equal((await call('/api/stock',{id:setId,product_id:'orata',units:4000,kind:'set'},true)).status,200);assert.equal(balance('orata'),4000);
+assert.equal((await call('/api/stock',{id:setId,product_id:'orata',units:4000,kind:'set'},true)).status,200,'ripetere lo stesso invio non cambia nulla');assert.equal(balance('orata'),4000);
+assert.equal((await call('/api/stock',{id:crypto.randomUUID(),product_id:'orata',units:0,kind:'set'},true)).status,200);assert.equal(balance('orata'),0);
+assert.equal((await call('/api/submit',{...setOrder,id:crypto.randomUUID()})).status,409,'a zero non si ordina');
+// Preflight della gestione e richiesta senza chiave.
+const pre=await worker.fetch(new Request('https://test/api/stock',{method:'OPTIONS',headers:{Origin:'https://ermestre.github.io','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,content-type'}}),env);
+assert.equal(pre.status,204);assert.match(pre.headers.get('Access-Control-Allow-Headers'),/Authorization/);
+const noKey=await call('/api/stock',null,false);assert.equal(noKey.status,401);assert.equal(noKey.headers.get('Access-Control-Allow-Origin'),'https://ermestre.github.io');
+const other=await worker.fetch(new Request('https://test/api/orders',{headers:{Origin:'https://ermestre.github.io',Authorization:'Bearer '+env.ADMIN_TOKEN}}),env);assert.equal(other.headers.get('Access-Control-Allow-Origin'),null,'gli ordini restano solo nel pannello');
 globalThis.fetch=old;sqlite.close();console.log('OK: magazzino atomico, carichi e banco idempotenti, quantità insufficienti senza ordini parziali, annullo, riattivazione, ritirato e storico preesistente');
