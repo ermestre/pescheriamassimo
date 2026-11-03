@@ -468,7 +468,9 @@ details[open]{padding-bottom:14px}
 summary{cursor:pointer;padding:14px 0;font-weight:600}
 details p{color:var(--tenue);font-size:15px}
 details button{margin:4px 6px 4px 0}
-#stockProducts article{border-top:1px solid var(--bordo);padding:10px 0}
+#stockProducts article{border-top:1px solid var(--bordo);padding:12px 0}
+.banco-testa{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.banco-testa b{font:700 22px var(--serif)}.banco-testa b.finito{color:var(--annullato)}
+.banco-pulsanti{display:flex;flex-wrap:wrap;gap:8px}.banco-pulsanti button{min-width:120px}
 #stockProducts h3{margin:0;font:600 18px var(--serif)}
 #stockProducts form{display:flex;flex-wrap:wrap;gap:8px}
 #reportOutput h2,#reportOutput h3{font-family:var(--serif)}
@@ -490,7 +492,7 @@ details button{margin:4px 6px 4px 0}
 <div id="orders"></div>
 <section class="strumenti"><h2>Altri strumenti</h2>
 <details><summary>Suono degli avvisi</summary><label>Carica MP3 (massimo 5 MB)<input id="alertFile" type="file" accept=".mp3,audio/mpeg"></label><p id="soundName">Suono: doppio bip.</p><button id="resetSound" type="button" class="secondario">Ripristina doppio bip</button><p>Il file resta solo in questo browser. Vengono riprodotti al massimo i primi 10 secondi. Premi Attiva avvisi o Prova suono per ascoltarlo.</p></details>
-<details><summary>Disponibilità e vendite al banco</summary><button id="stockLoad" type="button">Aggiorna disponibilità</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Consiglio: inserisci la quantità che vuoi riservare agli ordini online (es. 5 kg di spigola), così non serve scalare le vendite al banco. Togli il limite quando non serve più. Le quantità sono condivise da tutti i giorni di ritiro. Aggiungi solo il pesce libero da prenotazioni già esistenti. Gli ordini precedenti all’attivazione non vengono scalati. Ogni nuovo ordine prenota subito la quantità; Annullato la restituisce. Ritirato resta scalato. Registra le vendite al banco per mantenere corretto il residuo. I prodotti senza carico restano senza limite.</p></details>
+<details id="bancoBox"><summary>Vendite al banco</summary><button id="stockLoad" type="button" class="secondario">Aggiorna</button><p id="stockMsg" role="status"></p><div id="stockProducts"></div><p>Qui compaiono solo i pesci con una quantità impostata da Enrico nella gestione del menu. Tocca quanto hai venduto al banco: il sito mostra subito ai clienti quanto resta. Gli ordini online si scalano da soli, non vanno segnati qui.</p></details>
 <details><summary>Resoconto giornaliero</summary><label>Giorno del resoconto <input id="reportDay" type="date"></label><button id="reportLoad">Mostra resoconto</button><button id="reportCsv" class="secondario" disabled>Scarica movimenti CSV</button><p id="reportMsg" role="status"></p><div id="reportOutput"></div><p>Incassi e rimborsi per data del pagamento, ora italiana. Ordini e prodotti per data di ritiro. I pagamenti segnati prima di questa funzione non hanno una data e non sono inclusi negli incassi giornalieri. Annullare un ordine non registra un rimborso. Registro interno degli ordini online: non sostituisce scontrini o contabilità.</p></details>
 <details id="provaBox" hidden><summary>Prove: azzera tutto</summary><p>Modalità prova accesa. Cancella <b>tutti</b> gli ordini, gli incassi e le quantità, per ricominciare da zero. Si usa solo durante le prove: quando partite sul serio, spegnete la modalità prova dalla gestione e questo tasto sparisce.</p><button id="resetAll" type="button" class="elimina-tutto">Azzera tutto</button><p id="resetMsg" role="status"></p></details>
 <div class="uscita"><p id="sessionStatus"></p><button id="logout" class="secondario">Esci</button></div>
@@ -677,26 +679,41 @@ async function load(opts){
 
 
 
+// Vendite al banco: solo i prodotti con una quantità impostata (dalla gestione), pulsanti grandi e Annulla.
+const lastCounter={};
+const fmtQty=(n,u)=>Number(n).toLocaleString("it-IT",{maximumFractionDigits:3})+" "+(u==="porzioni"&&n===1?"porzione":u);
+async function stockMove(p,units,kind){const id=crypto.randomUUID();await api('/api/stock',{method:'POST',body:JSON.stringify({id,product_id:p.id,units,kind})});return id;}
 $("stockLoad").onclick=async()=>{
- const generation=authGeneration;$("stockLoad").disabled=true;$("stockMsg").textContent="Caricamento disponibilità…";
+ const generation=authGeneration;$("stockLoad").disabled=true;$("stockMsg").textContent="Caricamento…";
  try{
   const data=await api('/api/stock');if(generation!==authGeneration||!token)return;
+  const managed=data.products.filter(p=>p.managed);
   $("stockProducts").replaceChildren();
-  for(const p of data.products){
-   const row=element('article','');row.append(element('h3',p.name),element('p',p.managed?'Disponibile da vendere: '+p.available+' '+p.unit+' · Prenotato da preparare: '+p.reserved+' '+p.unit:'Quantità senza limite: nessun carico registrato.'));
-   const form=element('form',''),qty=element('input','');qty.type='number';qty.min=p.unit==='kg'?'0.001':'1';qty.step=p.unit==='kg'?'0.001':'1';qty.required=true;qty.setAttribute('aria-label','Quantità in '+p.unit);qty.placeholder='Quantità in '+p.unit;
-   const kind=element('select','');for(const [value,label] of [['arrival','Aggiungi quantità disponibile'],['counter','Scala vendita al banco']]){const opt=element('option',label);opt.value=value;kind.append(opt);}
-   const button=element('button','Registra movimento');form.append(qty,kind,button);let id='',signature='';
-   form.onsubmit=async e=>{
-    e.preventDefault();const units=Math.round(Number(qty.value)*1000);const next=p.id+':'+kind.value+':'+units;if(next!==signature){id=crypto.randomUUID();signature=next;}
-    if(!confirm((kind.value==='arrival'?'Aggiungere ':'Scalare ')+qty.value+' '+p.unit+' per '+p.name+'?'))return;
-    mutations++;button.disabled=true;
-    try{await api('/api/stock',{method:'POST',body:JSON.stringify({id,product_id:p.id,units,kind:kind.value})});await $("stockLoad").onclick();}catch(e){$("stockMsg").textContent=e.message;button.disabled=false;}finally{mutations--;}
-   };row.append(form);
-   if(p.managed){const free=element('button','Togli il limite');free.type='button';free.className='secondario';free.onclick=async()=>{if(!confirm('Togliere il limite a '+p.name+'? Torna ordinabile senza quantità massima. Gli ordini già ricevuti restano.'))return;mutations++;free.disabled=true;try{await api('/api/stock',{method:'POST',body:JSON.stringify({product_id:p.id,kind:'unlimited'})});await $("stockLoad").onclick();}catch(e){$("stockMsg").textContent=e.message;free.disabled=false;}finally{mutations--;}};row.append(free);}
-   $("stockProducts").append(row);
+  if(!managed.length){$("stockMsg").textContent="Nessun prodotto con quantità: tutti si possono ordinare senza limite. Le quantità le imposta Enrico dalla gestione del menu.";return;}
+  for(const p of managed){
+   const row=element('article','');row.className="banco";
+   const head=element('div','');head.className="banco-testa";
+   const qty=element('b',fmtQty(p.available,p.unit));qty.className=p.available<=0?"finito":"";
+   head.append(element('h3',p.name),qty);
+   row.append(head,element('p',p.available<=0?'Finito: i clienti non lo possono più ordinare online.':'Disponibili online. Prenotati da preparare: '+fmtQty(p.reserved,p.unit)+'.'));
+   const steps=p.unit==='kg'?[0.5,1,2]:[1,2,5];
+   const buttons=element('div','');buttons.className="banco-pulsanti";
+   const sell=async(amount,btn)=>{
+    const units=Math.round(amount*1000);if(units>Math.round(p.available*1000)){$("stockMsg").textContent="Di "+p.name+" restano solo "+fmtQty(p.available,p.unit)+".";return;}
+    btn.disabled=true;mutations++;
+    try{await stockMove(p,units,'counter');lastCounter[p.id]={units,amount};$("stockMsg").textContent=p.name+": venduto al banco "+fmtQty(amount,p.unit)+".";await $("stockLoad").onclick();}
+    catch(e){$("stockMsg").textContent=e.message;btn.disabled=false;}finally{mutations--;}
+   };
+   for(const n of steps){const b=element('button','Venduto −'+fmtQty(n,p.unit));b.type='button';b.onclick=()=>sell(n,b);buttons.append(b);}
+   const other=element('button','Altro…');other.type='button';other.className='secondario';
+   other.onclick=()=>{const v=prompt('Quanti '+p.unit+' di '+p.name+' hai venduto al banco?');if(v===null)return;const n=Number(String(v).replace(',','.'));if(!(n>0)||(p.unit!=='kg'&&!Number.isInteger(n))){$("stockMsg").textContent="Quantità non valida.";return;}sell(n,other);};
+   buttons.append(other);
+   if(lastCounter[p.id]){const undo=element('button','Annulla ultimo ('+fmtQty(lastCounter[p.id].amount,p.unit)+')');undo.type='button';undo.className='secondario';
+    undo.onclick=async()=>{undo.disabled=true;mutations++;try{await stockMove(p,lastCounter[p.id].units,'arrival');$("stockMsg").textContent=p.name+": annullata l'ultima vendita al banco.";delete lastCounter[p.id];await $("stockLoad").onclick();}catch(e){$("stockMsg").textContent=e.message;undo.disabled=false;}finally{mutations--;}};
+    buttons.append(undo);}
+   row.append(buttons);$("stockProducts").append(row);
   }
-  $("stockMsg").textContent="Disponibilità aggiornate. Le quantità già prenotate sono escluse dal disponibile.";
+  $("stockMsg").textContent="Tocca quanto hai venduto al banco. Gli ordini online si scalano da soli.";
  }catch(e){$("stockMsg").textContent=e.message;}finally{$("stockLoad").disabled=false;}
 };
 let reportData=null;
@@ -848,6 +865,7 @@ async function checkOrders(){
 setInterval(checkOrders,30000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkOrders();});
 
+$("bancoBox").ontoggle=()=>{if($("bancoBox").open)$("stockLoad").onclick();};
 $("resetAll").onclick=async()=>{
  const parola=prompt("Per cancellare TUTTI gli ordini, gli incassi e le quantità scrivi AZZERA");
  if(parola===null)return;if(parola.trim().toUpperCase()!=="AZZERA"){$("resetMsg").textContent="Niente cancellato: la parola non era AZZERA.";return;}
