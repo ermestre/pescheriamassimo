@@ -247,8 +247,8 @@
     <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Lascia vuoto<input id="website" tabindex="-1" autocomplete="off"></label></div>
     <div class="azioni"><button class="wa" id="inviaOrdine" disabled>Invia ordine</button><button class="copia" id="nuovoOrdine" hidden>Nuovo ordine</button></div>
     <details class="solo-whatsapp" id="waDettagli">
-      <summary>Preferisci mandarlo su WhatsApp?</summary>
-      <p class="piccolo">Un ordine mandato solo su WhatsApp non entra nell’elenco degli ordini della pescheria.</p>
+      <summary>Il servizio ordini non risponde? Manda l’ordine su WhatsApp</summary>
+      <p class="piccolo">Usa questa strada solo se “Invia ordine” non funziona: il messaggio arriva direttamente alla pescheria.</p>
       <div class="riepilogo" id="testo"></div>
       <div class="azioni"><a class="wa" id="linkWa" href="#" target="_blank" rel="noopener">Apri WhatsApp</a><button class="copia" id="copia">Copia</button></div>
     </details>
@@ -547,7 +547,7 @@ function testoOrdine() {
 
 document.getElementById("ordina").addEventListener("click", () => {
   riepilogoInviato=false;
-  document.getElementById("cassa").hidden=false;document.getElementById("conferma").hidden=true;document.getElementById("waDettagli").hidden=false;
+  document.getElementById("cassa").hidden=false;document.getElementById("conferma").hidden=true;document.getElementById("waDettagli").hidden=apiPronta;document.getElementById("waDettagli").open=!apiPronta;
   aggiornaOrari();disegnaCarrello();
   document.getElementById("inviaOrdine").disabled=!apiPronta;
   document.getElementById("inviaOrdine").hidden=false;
@@ -609,7 +609,7 @@ document.getElementById("inviaOrdine").addEventListener("click",async()=>{
   conferma.innerHTML=`<div class="spunta" aria-hidden="true">✓</div><h3>Ordine inviato</h3><p class="codice">Codice <b>${escapa(codiceCorto(data.id))}</b></p><p>Ritiro: <b>${escapa(etichettaGiorno(body.pickup_date))} alle ${escapa(body.pickup_time)}</b></p><p>Massimo ti conferma l’ordine su WhatsApp. Paghi al ritiro.</p>`;
   conferma.hidden=false;document.getElementById("cassa").hidden=true;document.getElementById("waDettagli").hidden=true;document.getElementById("chiudi").textContent="Chiudi";
   const text=testoOrdine();document.getElementById("testo").textContent=text;document.getElementById("linkWa").href=`https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(text)}`;
- }catch(e){esito("esito-errore");const perso=e.name==="TimeoutError"||e.name==="TypeError";if(!perso)collegaOrdini();status.textContent=perso?"Non abbiamo ricevuto la conferma. Premi di nuovo Invia ordine senza modificare i dati: lo stesso codice evita duplicati.":e.message;button.disabled=false;}
+ }catch(e){esito("esito-errore");const perso=e.name==="TimeoutError"||e.name==="TypeError";if(perso){document.getElementById("waDettagli").hidden=false;}if(!perso)collegaOrdini();status.textContent=perso?"Non abbiamo ricevuto la conferma. Premi di nuovo Invia ordine senza modificare i dati: lo stesso codice evita duplicati.":e.message;button.disabled=false;}
  finally{invioInCorso=false;document.getElementById("chiudi").disabled=false;}
 });
 document.getElementById("nuovoOrdine").addEventListener("click",()=>{
