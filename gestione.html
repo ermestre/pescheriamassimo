@@ -67,6 +67,7 @@
 .badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px}.badge.grigio{background:#eceff1;color:#56677a}.badge.giallo{background:#fff4d9;color:#7d5400}.badge.link{color:var(--blu);text-decoration:underline;padding-left:0}
 .riga-comandi{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.riga-prezzo{display:flex;align-items:center;gap:4px;margin:0}.riga-prezzo input{width:84px;padding:8px;text-align:right}.riga-prezzo small{color:var(--grigio)}
 .interruttore{display:inline-flex;align-items:center;gap:6px;margin:0;white-space:nowrap;font-size:13px;color:var(--blu);cursor:pointer}.interruttore input[type="checkbox"]{flex:none;padding:0;border:0;appearance:none;-webkit-appearance:none;width:44px;height:26px;border-radius:999px;background:#c8d4d9;position:relative;margin:0;cursor:pointer;transition:background .15s}.interruttore input[type="checkbox"]::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}.interruttore input[type="checkbox"]:checked{background:#1e8e3e}.interruttore input[type="checkbox"]:checked::after{left:21px}
+.badge.blu{background:#e3edf7;color:#1b2f4e}.stato-scorta{margin:4px 0 8px;font-size:14px;color:var(--blu)}
 .scelta.mini{min-height:34px;padding:5px 10px;font-size:13px}
 .testa-foglio{position:sticky;top:-18px;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;margin:-18px -16px 8px;padding:14px 16px;border-bottom:1px solid #eee}.testa-foglio h3{margin:0;font-size:18px;color:var(--blu)}.testa-foglio button{width:auto;padding:10px 18px}
 .giorno-apertura{padding:10px 0;border-bottom:1px solid #eee}.giorno-apertura.chiuso b{color:var(--grigio)}.giorno-apertura .riga-termine{align-items:center}.giorno-apertura .riga-termine>*{flex:none}.giorno-apertura .riga-termine b{flex:1}
@@ -288,6 +289,7 @@ async function carica() {
     sporco = false;
     mostraEditor();
     messaggio("Menu caricato.", "ok");
+    caricaScorte();
   } catch (e) {
     messaggio("Non riesco a caricare il menu: " + e.message, "err");
   }
@@ -516,6 +518,10 @@ function voceHtml(ci, vi, v) {
       ${pulsantiScelta(["Disponibile","Esaurito","Terminato"],({esaurito:"Esaurito",terminato:"Terminato"})[v.stato]||"Disponibile",`impostaStato(${ci},${vi},'§')`)}
       <p class="piccolo">Esaurito: il cliente lo vede ma non lo ordina. Terminato: nascosto.</p>
       ${esitoScheda(ci,v)}
+      <details${scorte?.[v.id]?.managed?" open":""}>
+        <summary>Quantità disponibile</summary>
+        ${scortaHtml(ci,vi,v)}
+      </details>
       <details>
         <summary>Foto</summary>
         ${v.foto ? `<img class="miniatura" src="${esc(v.foto)}" alt="">` : ""}
@@ -633,7 +639,7 @@ function rigaVoce(ci,vi,v){
  return `<div class="riga-voce${v.disponibile&&v.stato!=="terminato"?"":" spenta"}" id="riga-${ci}-${vi}" data-nome="${esc(String(v.nome||"").toLowerCase())}">
   <button type="button" class="riga-apri" onclick="apriVoce(${ci},${vi})">
    ${v.foto?`<img class="pollice" src="${esc(v.foto)}" alt="">`:`<span class="pollice vuoto">Foto</span>`}
-   <span class="riga-testo"><b>${esc(v.nome||"Senza nome")}</b><span class="riga-badge">${stato?`<span class="badge grigio">${stato}</span>`:""}${m.length?`<span class="badge giallo">Da completare</span>`:""}<span class="badge link">Modifica</span></span></span>
+   <span class="riga-testo"><b>${esc(v.nome||"Senza nome")}</b><span class="riga-badge">${badgeScorta(v)}${stato?`<span class="badge grigio">${stato}</span>`:""}${m.length?`<span class="badge giallo">Da completare</span>`:""}<span class="badge link">Modifica</span></span></span>
   </button>
   <div class="riga-comandi">
    <label class="riga-prezzo"><input type="number" step="0.01" min="0" inputmode="decimal" aria-label="Prezzo di ${esc(v.nome)}" value="${v.prezzo ?? ""}" onchange="aggiornaPrezzo(${ci},${vi},this.value)"><small>${unita}</small></label>
@@ -717,6 +723,60 @@ function aperturaHtml(){
 function aggiornaChiuso(i,chiuso){orariApertura()[i].chiuso=chiuso;segna();ridisegnaRitiro();}
 function aggiornaApertura(i,f,k,val){const d=orariApertura()[i];d.fasce ||= [["",""],["",""]];d.fasce[f] ||= ["",""];d.fasce[f][k]=val;segna();}
 function copiaApertura(){const lista=orariApertura(),primo=lista.find(d=>!d.chiuso);if(!primo)return;for(const d of lista)if(!d.chiuso)d.fasce=JSON.parse(JSON.stringify(primo.fasce||[]));segna();ridisegnaRitiro();messaggio("Orari copiati sui giorni aperti. Ricordati di salvare.","info");}
+
+// ---- QUANTITÀ DISPONIBILI (archivio ordini su Cloudflare, con la chiave del pannello) ----
+const API_ORDINI="https://pescheria-massimo-api.ermestrerm.workers.dev";
+let scorte=null; // product_id -> {managed, available, reserved, unit}
+function chiaveOrdini(){try{return localStorage.getItem("pm_ordini_key")||"";}catch(e){return "";}}
+function unitaScorta(v){return v.unita==="kg"?"kg":v.unita==="etto"?"etti":"porzioni";}
+function numero(n){return Number(n).toLocaleString("it-IT",{maximumFractionDigits:3});}
+async function apiScorte(metodo,corpo){
+ const r=await fetch(API_ORDINI+"/api/stock",{method:metodo,headers:{"Authorization":"Bearer "+chiaveOrdini(),"Content-Type":"application/json"},body:corpo?JSON.stringify(corpo):undefined,cache:"no-store"});
+ let d={};try{d=await r.json();}catch(e){}
+ if(r.status===401){try{localStorage.removeItem("pm_ordini_key");}catch(e){}scorte=null;throw new Error("chiave del pannello ordini non valida: inseriscila di nuovo");}
+ if(!r.ok)throw new Error(d.errore||"servizio ordini non raggiungibile");
+ return d;
+}
+async function caricaScorte(){
+ if(!chiaveOrdini()||!dati)return;
+ try{const d=await apiScorte("GET");scorte=Object.fromEntries(d.products.map(p=>[p.id,p]));}
+ catch(e){messaggio("Quantità non lette: "+e.message,"err");}
+ dati.categorie.forEach((c,ci)=>c.voci.forEach((v,vi)=>ridisegnaRiga(ci,vi)));
+ const aperta=String($("schedaVoceCorpo")?.dataset.voce||"");if(aperta){const [ci,vi]=aperta.split(":").map(Number);ridisegnaVoce(ci,vi);}
+}
+function collegaOrdini(ci,vi){
+ const k=String($(`chiave-${ci}-${vi}`).value||"").trim();if(k.length<20){messaggio("La chiave del pannello ordini ha almeno 20 caratteri.","err");return;}
+ try{localStorage.setItem("pm_ordini_key",k);}catch(e){}
+ caricaScorte();
+}
+function badgeScorta(v){const s=scorte?.[v.id];return s?.managed?`<span class="badge blu">${numero(s.available)} ${unitaScorta(v)} disponibili</span>`:"";}
+function scortaHtml(ci,vi,v){
+ if(!chiaveOrdini())return `<p class="piccolo">Per inserire le quantità serve la chiave del pannello ordini, la stessa che usa Massimo. Si inserisce una volta sola su questo telefono.</p>
+  <div class="riga-termine"><input id="chiave-${ci}-${vi}" type="password" autocomplete="off" placeholder="Chiave del pannello ordini"><button type="button" class="secondario" onclick="collegaOrdini(${ci},${vi})">Collega</button></div>`;
+ const s=scorte?.[v.id],u=unitaScorta(v);
+ const stato=!scorte?"Lettura delle quantità…":s?.managed?`Disponibili da vendere: <b>${numero(s.available)} ${u}</b>. Prenotati da preparare: ${numero(s.reserved)} ${u}.`:"Senza limite: i clienti possono ordinarne quanto vogliono.";
+ return `<p class="stato-scorta">${stato}</p>
+  <label>Quantità libera da vendere online (${u})</label>
+  <div class="riga-termine"><input id="quantita-${ci}-${vi}" type="number" min="0" step="${v.unita==="kg"?"0.5":"1"}" inputmode="decimal" placeholder="Es. ${v.unita==="kg"?"10":"20"}"><button type="button" class="principale" onclick="impostaQuantita(${ci},${vi})">Imposta</button></div>
+  ${s?.managed?`<button type="button" class="secondario" style="margin-top:8px" onclick="togliLimite(${ci},${vi})">Togli il limite</button>`:""}
+  <p class="piccolo">Si salva subito, senza premere Salva modifiche. Ogni ordine online scala da solo; le vendite al banco si segnano nel pannello ordini. Esempio: con 10 kg e un ordine di 1 kg restano 9 kg.</p>`;
+}
+async function impostaQuantita(ci,vi){
+ const v=dati.categorie[ci].voci[vi],val=Number(String($(`quantita-${ci}-${vi}`).value).replace(",","."));
+ if(!Number.isFinite(val)||val<0){messaggio("Scrivi una quantità valida.","err");return;}
+ if(v.unita!=="kg"&&!Number.isInteger(val)){messaggio("Per questo prodotto scrivi un numero intero.","err");return;}
+ if(!confirm(`Impostare ${numero(val)} ${unitaScorta(v)} disponibili per ${v.nome}?`))return;
+ try{await apiScorte("POST",{id:crypto.randomUUID(),product_id:v.id,units:Math.round(val*1000),kind:"set"});messaggio(`${v.nome}: ${numero(val)} ${unitaScorta(v)} disponibili.`,"ok");}
+ catch(e){messaggio("Quantità non salvata: "+e.message,"err");}
+ caricaScorte();
+}
+async function togliLimite(ci,vi){
+ const v=dati.categorie[ci].voci[vi];
+ if(!confirm(`Togliere il limite a ${v.nome}? Torna ordinabile senza quantità massima.`))return;
+ try{await apiScorte("POST",{product_id:v.id,kind:"unlimited"});messaggio(`${v.nome}: senza limite.`,"ok");}
+ catch(e){messaggio("Operazione non riuscita: "+e.message,"err");}
+ caricaScorte();
+}
 
 // Archivio pubblico dei soli dati di provenienza: nessuna fattura o dato personale.
 const CAMPI_ARRIVO=['nome','lotto_fornitore','nome_scientifico','paese_origine','zona_fao','metodo','provenienza','data_pesca','data_arrivo','ora_arrivo','attrezzo','stato_prodotto','condizione','data_congelamento','glassatura','allergeni'];
